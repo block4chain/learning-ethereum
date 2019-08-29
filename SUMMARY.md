@@ -6,4 +6,6 @@
 ## 数据结构
 
 * [RLP编码](shu-ju-jie-gou/rlp-bian-ma.md)
+* [HP编码](shu-ju-jie-gou/hp-bian-ma.md)
+* [MPT树](shu-ju-jie-gou/mpt-shu.md)
 
