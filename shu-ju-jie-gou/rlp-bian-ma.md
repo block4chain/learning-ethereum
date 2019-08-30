@@ -83,3 +83,11 @@ type encbuf struct {
 
 **todo: 理解lheads的作用**
 
+## 参考资料
+
+{% embed url="https://yuanxuxu.com/2018/07/25/ethereum-code-analysis-rlp/" %}
+
+[https://github.com/ZtesoftCS/go-ethereum-code-analysis/blob/master/rlp%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.md](https://github.com/ZtesoftCS/go-ethereum-code-analysis/blob/master/rlp%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90.md)
+
+
+
