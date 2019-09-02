@@ -21,9 +21,23 @@ description: >-
 
 #### 扩展结点\(Extension\)
 
-一种非终结结点。
+一种非终结结点。代表两个不同的key的共享的一段nibble数组:
+
+* 拥有一个nibble数组, 采用HP编码，并且终结标志置0。nibble数组为至少两个不同的key的共享部分。
+* 结点拥有一个值，该值为一个hash，指向其它分支结点。
 
 #### 分支结点\(Branch\)
 
+分支结点是一个基数树\(Radix树\)的结点:
 
+* 结点的度为17，其中16个用于索引\(nibble的取值空间\)其它结点，第17个用于存放分支结点的值\(此时结点是一个终结结点\)
+* 如果结点有值，则该分支结点也是一个终结结点。
+
+### 数学定义
+
+![](../.gitbook/assets/selection_009.png)
+
+![](../.gitbook/assets/selection_007.png)
+
+![](../.gitbook/assets/selection_008.png)
 
