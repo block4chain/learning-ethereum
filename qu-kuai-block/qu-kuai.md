@@ -5,5 +5,7 @@ description: >-
 
 # 区块
 
+![](../.gitbook/assets/yi-tai-fang-zu-cheng.jpg)
+
 todo: 以区块为研究核心，探究区块的组成、创建、执行、到状态提交等思路研究以太坊
 
