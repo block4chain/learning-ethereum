@@ -183,9 +183,221 @@ func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error)
 
 #### 插入
 
+暂略
+
 查找
 
+暂略
+
 删除
+
+暂略
+
+#### 哈希
+
+Ethereum使用自定义hasher对象完成对Trie树的hash计算
+
+{% code-tabs %}
+{% code-tabs-item title="trie/hasher.go" %}
+```go
+//hasher
+type hasher struct {
+	tmp    sliceBuffer
+	sha    keccakState
+	onleaf LeafCallback
+}
+//遍历到叶子结点时的回调函数
+type LeafCallback func(leaf []byte, parent common.Hash) error
+
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type sliceBuffer []byte
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+hasher对象采用对象池技术进行管理
+
+{% code-tabs %}
+{% code-tabs-item title="trie/hasher.go" %}
+```go
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return &hasher{
+			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			sha: sha3.NewLegacyKeccak256().(keccakState),
+		}
+	},
+}
+
+func newHasher(onleaf LeafCallback) *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.onleaf = onleaf
+	return h
+}
+
+func returnHasherToPool(h *hasher) {
+	hasherPool.Put(h)
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+hasher对象先检查Trie树的hash缓存，如果缓存存在并且树没有被修改过，则优先使用缓存
+
+{% code-tabs %}
+{% code-tabs-item title="trie/hasher.go" %}
+```go
+func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
+	// If we're not storing the node, just hashing, use available cached data
+	if hash, dirty := n.cache(); hash != nil {
+		if db == nil {
+			return hash, n, nil
+		}
+		if !dirty {
+			switch n.(type) {
+			case *fullNode, *shortNode:
+				return hash, hash, nil
+			default:
+				return hash, n, nil
+			}
+		}
+	}
+    //....
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+在没有缓存或树被修改过的情况时，则需要对树进行完整hash. hasher优先对子树进行哈希
+
+```go
+// Trie not processed yet or needs storage, walk the children
+	collapsed, cached, err := h.hashChildren(n, db)
+	if err != nil {
+		return hashNode{}, n, err
+	}
+
+//哈希子树
+func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
+	var err error
+
+	switch n := original.(type) {
+	case *shortNode:
+		// Hash the short node's child, caching the newly hashed subtree
+		collapsed, cached := n.copy(), n.copy()  //浅拷贝结点
+		collapsed.Key = hexToCompact(n.Key)  //对结点的key进行压缩
+		cached.Key = common.CopyBytes(n.Key)  
+
+		if _, ok := n.Val.(valueNode); !ok {
+		    //当前结点不是叶子结点，即是一个扩展结点，继续哈希该结点
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
+			if err != nil {
+				return original, original, err
+			}
+		}
+		return collapsed, cached, nil
+
+	case *fullNode:
+		// Hash the full node's children, caching the newly hashed subtrees
+		collapsed, cached := n.copy(), n.copy()
+        
+        //对分支结点的各个分支进行压缩
+		for i := 0; i < 16; i++ {
+			if n.Children[i] != nil {
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
+				if err != nil {
+					return original, original, err
+				}
+			}
+		}
+		cached.Children[16] = n.Children[16]
+		return collapsed, cached, nil
+
+	default:
+		// Value and hash nodes don't have children so they're left as were
+		return n, original, nil
+	}
+}
+```
+
+计算子树哈希后，生成树的哈希，并存储到内存Database中.
+
+```go
+hashed, err := h.store(collapsed, db, force)
+	if err != nil {
+		return hashNode{}, n, err
+	}
+	
+//生成哈希并存储
+func (h *hasher) store(n node, db *Database, force bool) (node, error) {
+	// Don't store hashes or empty nodes.
+	if _, isHash := n.(hashNode); n == nil || isHash {
+		return n, nil
+	}
+	// Generate the RLP encoding of the node
+	h.tmp.Reset()
+	if err := rlp.Encode(&h.tmp, n); err != nil {
+		panic("encode error: " + err.Error())
+	}
+	if len(h.tmp) < 32 && !force {
+	    //非强制模式下，不进行哈希，原文返回
+		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
+	}
+	// Larger nodes are replaced by their hash and stored in the database.
+	hash, _ := n.cache()
+	if hash == nil {
+		hash = h.makeHashNode(h.tmp)  //生成哈希
+	}
+
+	if db != nil {
+		// We are pooling the trie nodes into an intermediate memory cache
+		hash := common.BytesToHash(hash)
+
+		db.lock.Lock()
+		db.insert(hash, h.tmp, n)  //将结点存储到Database中
+		db.lock.Unlock()
+
+		// Track external references from account->storage trie
+		//通知叶结点回调函数
+		if h.onleaf != nil {
+			switch n := n.(type) {
+			case *shortNode:
+				if child, ok := n.Val.(valueNode); ok {
+					h.onleaf(child, hash)
+				}
+			case *fullNode:
+				for i := 0; i < 16; i++ {
+					if child, ok := n.Children[i].(valueNode); ok {
+						h.onleaf(child, hash)
+					}
+				}
+			}
+		}
+	}
+	return hash, nil
+}
+```
+
+最后更新结点哈希缓存
+
+```go
+cachedHash, _ := hashed.(hashNode)
+	switch cn := cached.(type) {
+	case *shortNode:
+		cn.flags.hash = cachedHash
+		if db != nil {
+			cn.flags.dirty = false
+		}
+	case *fullNode:
+		cn.flags.hash = cachedHash
+		if db != nil {
+			cn.flags.dirty = false
+		}
+	}
+```
 
 ## 参考资料
 
