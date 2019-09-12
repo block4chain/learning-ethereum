@@ -4,6 +4,19 @@ description: 不同与Bitcoin的UTXO模型，以太坊基于帐户模型。
 
 # 帐户\(Account\)
 
+{% code-tabs %}
+{% code-tabs-item title="core/state/state\_object.go" %}
+```go
+type Account struct {
+	Nonce    uint64  //该帐户发出的交易序列号，单调递增
+	Balance  *big.Int //该帐户的余额
+	Root     common.Hash // 该帐户的状态存储, 一棵mpt树, root存储树根hash
+	CodeHash []byte //合约帐户对应的合约代码hash，外部帐户该值为空
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
 ## 帐户地址
 
 以太方帐户地址是一个20B字节数组。
