@@ -291,8 +291,134 @@ func (self *StateDB) Prepare(thash, bhash common.Hash, ti int)
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 func (s *StateDB) Finalise(deleteEmptyObjects bool)
-
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+## 日志\(journal\)
+
+### 实现
+
+状态数据库所有的状态修改操作都会通过日志进行记录.
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/journal.go" %}
+```go
+type journal struct {
+	entries []journalEntry         // Current changes tracked by the journal
+	dirties map[common.Address]int // Dirty accounts and the number of changes
+}
+
+type journalEntry interface {
+	// revert undoes the changes introduced by this journal entry.
+	revert(*StateDB)
+	// dirtied returns the Ethereum address modified by this journal entry.
+	dirtied() *common.Address
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+journalEntry是一个接口，根据不同类型的状态修改，以太坊提供了不同的实现.
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/journal.go" %}
+```go
+//创建新的stateObject
+createObjectChange struct {
+		account *common.Address
+}
+//重置stateObject
+resetObjectChange struct {
+		prev *stateObject
+}
+//销毁stateObject
+suicideChange struct {
+		account     *common.Address
+		prev        bool // whether account had already suicided
+		prevbalance *big.Int
+}
+
+//变更余额
+balanceChange struct {
+		account *common.Address
+		prev    *big.Int
+}
+//变更交易计数
+nonceChange struct {
+		account *common.Address
+		prev    uint64
+}
+//帐户数据状态变更
+storageChange struct {
+		account       *common.Address
+		key, prevalue common.Hash
+}
+//帐户合约代码变更
+codeChange struct {
+		account            *common.Address
+		prevcode, prevhash []byte
+}
+
+//退款变更
+refundChange struct {
+		prev uint64
+}
+//添加合约日志
+addLogChange struct {
+		txhash common.Hash
+}
+//添加preimage
+addPreimageChange struct {
+		hash common.Hash
+}
+
+//帐户第一次增加余额
+touchChange struct {
+		account   *common.Address
+		prev      bool
+		prevDirty bool
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 方法
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/journal.go" %}
+```go
+//追加一条journal条目
+func (j *journal) append(entry journalEntry)
+//回滚到指定的snapshot id
+func (j *journal) revert(statedb *StateDB, snapshot int)
+//指定地址的修改次数加1
+func (j *journal) dirty(addr common.Address)
+//journal条目数
+func (j *journal) length() int
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 回滚
+
+状态数据库可以回滚到指定的snapshot id, 回滚的方法如下:
+
+```go
+//参数snapshot是journal的一个索引，以类似栈的方式回滚历史修改
+func (j *journal) revert(statedb *StateDB, snapshot int) {
+	for i := len(j.entries) - 1; i >= snapshot; i-- {
+		// Undo the changes made by the operation
+		j.entries[i].revert(statedb)
+
+		// Drop any dirty tracking induced by the change
+		if addr := j.entries[i].dirtied(); addr != nil {
+			if j.dirties[*addr]--; j.dirties[*addr] == 0 {
+				delete(j.dirties, *addr)
+			}
+		}
+	}
+	j.entries = j.entries[:snapshot]
+}
+```
 
