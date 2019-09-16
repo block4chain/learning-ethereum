@@ -134,7 +134,7 @@ type stateObject struct {
     //数据状态标记
 	dirtyCode bool // 合约代码是否被修改
 	suicided  bool
-	deleted   bool
+	deleted   bool //是否已经删除
 }
 ```
 {% endcode-tabs-item %}
@@ -169,32 +169,37 @@ func (s *stateObject) getTrie(db Database) Trie {
 ```go
 //stateObject进行RLP编码，只编码stateObject.data字段.
 func (s *stateObject) EncodeRLP(w io.Writer) error
+//返回帐户地址
+func (s *stateObject) Address() common.Address
+//设置帐户交易计数器
+func (s *stateObject) SetNonce(nonce uint64)
+//返回帐户交易计数
+func (s *stateObject) Nonce() uint64 
+
 //获取帐户数据中指定key的值，该值可能是还未提交的值，也是已经提交到storage trie的值
 func (s *stateObject) GetState(db Database, key common.Hash) common.Hash 
+//设置新的帐户数据
+func (s *stateObject) SetState(db Database, key, value common.Hash)
 //从帐户storage trie中获取已经提交的值.
 func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash
 //提交storage trie树
 func (s *stateObject) CommitTrie(db Database) error
+
+//返回帐户余额
+func (s *stateObject) Balance() *big.Int
 //增加帐户余额
 func (s *stateObject) AddBalance(amount *big.Int) 
 //减少帐户余额
 func (s *stateObject) SubBalance(amount *big.Int)
 //修改帐户余额
 func (s *stateObject) SetBalance(amount *big.Int)
-//返回帐户地址
-func (s *stateObject) Address() common.Address
+
 //返回合约代码
 func (s *stateObject) Code(db Database) []byte
 //设置合约代码
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte)
-//设置帐户交易计数器
-func (s *stateObject) SetNonce(nonce uint64)
 //返回合约哈希值
 func (s *stateObject) CodeHash() []byte
-//返回帐户余额
-func (s *stateObject) Balance() *big.Int
-//返回帐户交易计数
-func (s *stateObject) Nonce() uint64 
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
