@@ -46,7 +46,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-### 状态数据库
+## 状态数据库
 
 状态数据库是以帐户地址作为键的KV数据库。
 
