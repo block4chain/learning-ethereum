@@ -285,7 +285,9 @@ func (self *StateDB) Snapshot() int
 //回滚到指定的快照
 func (self *StateDB) RevertToSnapshot(revid int)
 
+//更新StateDB当前的block, tx, tx index
 func (self *StateDB) Prepare(thash, bhash common.Hash, ti int)
+
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 func (s *StateDB) Finalise(deleteEmptyObjects bool)
