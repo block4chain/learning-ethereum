@@ -388,6 +388,13 @@ touchChange struct {
 {% code-tabs %}
 {% code-tabs-item title="core/state/journal.go" %}
 ```go
+//新建journal
+func newJournal() *journal {
+	return &journal{
+		dirties: make(map[common.Address]int),
+	}
+}
+
 //追加一条journal条目
 func (j *journal) append(entry journalEntry)
 //回滚到指定的snapshot id
@@ -421,4 +428,85 @@ func (j *journal) revert(statedb *StateDB, snapshot int) {
 	j.entries = j.entries[:snapshot]
 }
 ```
+
+## 快照
+
+StateDB支持快照，从而在运行时回滚历史修改,  StateDB定义中支持快照的字段包括:
+
+```go
+type StateDB struct {
+    //...
+    journal        *journal   //状态修改journal
+    validRevisions []revision //有效修改集
+	nextRevisionId int  //下一个快照id
+	//....
+}
+```
+
+StateDB快照的实现基于journal. StateDB.validRevisions保存了历史快照，revision结构的定义如下:
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/statedb.go" %}
+```go
+type revision struct {
+	id           int   //快照id
+	journalIndex int  //journal中entry的索引，journal中索引大于或等于journalIndex的修改包含在当前快照中
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 创建快照
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/statedb.go" %}
+```go
+func (self *StateDB) Snapshot() int {
+	id := self.nextRevisionId
+	self.nextRevisionId++
+	self.validRevisions = append(self.validRevisions, revision{id, self.journal.length()})
+	return id
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 恢复快照
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/statedb.go" %}
+```go
+func (self *StateDB) RevertToSnapshot(revid int) {
+	// Find the snapshot in the stack of valid snapshots.
+	idx := sort.Search(len(self.validRevisions), func(i int) bool {
+		return self.validRevisions[i].id >= revid
+	})
+	if idx == len(self.validRevisions) || self.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
+	}
+	snapshot := self.validRevisions[idx].journalIndex
+
+	// Replay the journal to undo changes and remove invalidated snapshots
+	self.journal.revert(self, snapshot)
+	self.validRevisions = self.validRevisions[:idx]
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+清理快照
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/statedb.go" %}
+```go
+func (s *StateDB) clearJournalAndRefund() {
+	s.journal = newJournal()
+	s.validRevisions = s.validRevisions[:0]
+	s.refund = 0
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+
 
