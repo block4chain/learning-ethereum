@@ -64,10 +64,10 @@ type StateDB struct {
 
 	refund uint64
 
-	thash, bhash common.Hash
-	txIndex      int
-	logs         map[common.Hash][]*types.Log
-	logSize      uint
+	thash, bhash common.Hash //当前evm正在处理的Block, Transaction哈希值
+	txIndex      int   //当前正在处理的事务索引
+	logs         map[common.Hash][]*types.Log //合约日志记录
+	logSize      uint //合约日志条数
 
 	preimages map[common.Hash][]byte
 
@@ -133,7 +133,7 @@ type stateObject struct {
 
     //数据状态标记
 	dirtyCode bool // 合约代码是否被修改
-	suicided  bool
+	suicided  bool  //帐户被销毁标记
 	deleted   bool //是否已经删除
 }
 ```
@@ -200,6 +200,96 @@ func (s *stateObject) Code(db Database) []byte
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte)
 //返回合约哈希值
 func (s *stateObject) CodeHash() []byte
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 方法
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/statedb.go" %}
+```go
+//获取数据库操作最后一次错误
+func (self *StateDB) Error() error
+//重置StateDB对象
+func (self *StateDB) Reset(root common.Hash) error
+//添加一条合约日志
+func (self *StateDB) AddLog(log *types.Log)
+//根据交易hash获取合约日志序列
+func (self *StateDB) GetLogs(hash common.Hash) []*types.Log
+//获取所有的合约日志
+func (self *StateDB) Logs() []*types.Log
+
+func (self *StateDB) AddPreimage(hash common.Hash, preimage []byte)
+func (self *StateDB) Preimages() map[common.Hash][]byte
+
+func (self *StateDB) AddRefund(gas uint64)
+func (self *StateDB) SubRefund(gas uint64)
+func (self *StateDB) GetRefund() uint64 
+
+func (self *StateDB) Exist(addr common.Address) bool
+func (self *StateDB) Empty(addr common.Address)
+
+func (self *StateDB) GetBalance(addr common.Address) *big.Int
+func (self *StateDB) GetNonce(addr common.Address) uint64
+//增加帐户余额
+func (self *StateDB) AddBalance(addr common.Address, amount *big.Int)
+//减少帐户余额
+func (self *StateDB) SubBalance(addr common.Address, amount *big.Int)
+//设置帐户余额
+func (self *StateDB) SetBalance(addr common.Address, amount *big.Int)
+//设置帐户交易计数
+func (self *StateDB) SetNonce(addr common.Address, nonce uint64)
+
+func (self *StateDB) TxIndex() int
+func (self *StateDB) BlockHash() common.Hash
+
+//设置帐户合约代码
+func (self *StateDB) SetCode(addr common.Address, code []byte)
+func (self *StateDB) GetCode(addr common.Address) []byte
+func (self *StateDB) GetCodeSize(addr common.Address) int
+func (self *StateDB) GetCodeHash(addr common.Address) common.Hash
+
+func (self *StateDB) GetProof(a common.Address) ([][]byte, error)
+func (self *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, error)
+
+//获取帐户数据中某个key的值，有可能该值还未提交
+func (self *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash
+//获取帐户数据中某个key已经提交的值
+func (self *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash
+//设置帐户数据新的状态
+func (self *StateDB) SetState(addr common.Address, key, value common.Hash)
+
+//返回StateDB的后端存储
+func (self *StateDB) Database() Database
+//返回帐户数据的Trie树，并提交内存状态修改到Trie树
+func (self *StateDB) StorageTrie(addr common.Address) Trie
+
+//帐户是否被主动销毁
+func (self *StateDB) HasSuicided(addr common.Address) bool
+
+//销毁帐户
+func (self *StateDB) Suicide(addr common.Address)
+
+//获取或新建帐户stateObject
+func (self *StateDB) GetOrNewStateObject(addr common.Address) *stateObject
+//新建帐户
+func (self *StateDB) CreateAccount(addr common.Address)
+//遍历帐户数据所有的状态
+func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error
+//深拷贝StateDB
+func (self *StateDB) Copy() *StateDB 
+
+//StateDB快照
+func (self *StateDB) Snapshot() int
+//回滚到指定的快照
+func (self *StateDB) RevertToSnapshot(revid int)
+
+func (self *StateDB) Prepare(thash, bhash common.Hash, ti int)
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash
+func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
+func (s *StateDB) Finalise(deleteEmptyObjects bool)
+
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
