@@ -516,5 +516,57 @@ func (s *StateDB) clearJournalAndRefund() {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+## 存储结构
+
+StateDB是世界状态数据库在运行时的实例，状态数据存放在一个持久化的数据库中，并通过Trie树索引访问
+
+```go
+type StateDB struct {
+	db   Database  //持久化数据库
+	trie Trie //内存Trie索引树
+	//....
+}
+```
+
+### `state.Database接口`
+
+`StateDB.db`是接口`state.Database`的一个实例。接口`state.Database`用于构造世界状态内存Trie索引树和用户状态内存Trie索引树，通过接口`state.Database`也可以获取帐户下合约代码。最后接口state.Database可以获得后端持久化存储。
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/database.go" %}
+```go
+type Database interface {
+	// OpenTrie opens the main account trie.
+	OpenTrie(root common.Hash) (Trie, error)
+	// OpenStorageTrie opens the storage trie of an account.
+	OpenStorageTrie(addrHash, root common.Hash) (Trie, error)
+	// CopyTrie returns an independent copy of the given trie.
+	CopyTrie(Trie) Trie
+
+	// ContractCode retrieves a particular contract's code.
+	ContractCode(addrHash, codeHash common.Hash) ([]byte, error)
+	// ContractCodeSize retrieves a particular contracts code's size.
+	ContractCodeSize(addrHash, codeHash common.Hash) (int, error)
+
+	// TrieDB retrieves the low level trie database used for data storage.
+	TrieDB() *trie.Database
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+接口`state.Database`在以太坊中只有一种实现:
+
+{% code-tabs %}
+{% code-tabs-item title="core/state/database.go" %}
+```go
+type cachingDB struct {
+	db            *trie.Database
+	codeSizeCache *lru.Cache  //用于缓存contract code，默认大小为100000
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
 
 
