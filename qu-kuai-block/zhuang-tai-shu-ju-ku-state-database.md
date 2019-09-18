@@ -57,7 +57,9 @@ type StateDB struct {
 	db   Database  //存储mpt树, 合约代码
 	trie Trie //世界状态对应的mpt树
 
+   //stateObject内存缓存
 	stateObjects      map[common.Address]*stateObject
+	//发生过修改的stateObject
 	stateObjectsDirty map[common.Address]struct{}
 
 	dbErr error  //数据库发生的错误
@@ -288,8 +290,14 @@ func (self *StateDB) RevertToSnapshot(revid int)
 //更新StateDB当前的block, tx, tx index
 func (self *StateDB) Prepare(thash, bhash common.Hash, ti int)
 
+//触发Finalise操作，同时清理snapshot和refund，为下一次交易处理做准备
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash
+//提交StateDB到持久化存储
+//1. 持久化存储合约代码
+//2. 提交帐户状态trie树到持久化存储
+//3. 提交世界状态trie树到持久化存储
 func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
+//将对帐户和帐户状态的修改提交到对应的trie树，但还没有持久存储
 func (s *StateDB) Finalise(deleteEmptyObjects bool)
 ```
 {% endcode-tabs-item %}
