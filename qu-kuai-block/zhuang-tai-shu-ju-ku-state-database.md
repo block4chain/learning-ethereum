@@ -528,7 +528,7 @@ type StateDB struct {
 }
 ```
 
-### `state.Database接口`
+### 接口`state.Database`
 
 `StateDB.db`是接口`state.Database`的一个实例。接口`state.Database`用于构造世界状态内存Trie索引树和用户状态内存Trie索引树，通过接口`state.Database`也可以获取帐户下合约代码。最后接口state.Database可以获得后端持久化存储。
 
@@ -568,5 +568,39 @@ type cachingDB struct {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-该结构以[Trie数据库](trie-shu-ju-ku.md)作为后端的持久化存储。
+### 类型`trie.Database`
+
+类型trie.Database是一个数据库中间层，它用于聚合上层的写数据库请求，然后周期性的将请求批量的写入到持久化存储中。
+
+{% code-tabs %}
+{% code-tabs-item title="trie/database.go" %}
+```go
+type Database struct {
+	diskdb ethdb.KeyValueStore // 持久化kv存储
+
+	cleans  *bigcache.BigCache          //缓存
+	dirties map[common.Hash]*cachedNode // Data and references relationships of dirty nodes
+	oldest  common.Hash                 // Oldest tracked node, flush-list head
+	newest  common.Hash                 // Newest tracked node, flush-list tail
+
+	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
+	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
+
+	gctime  time.Duration      // Time spent on garbage collection since last commit
+	gcnodes uint64             // Nodes garbage collected since last commit
+	gcsize  common.StorageSize // Data storage garbage collected since last commit
+
+	flushtime  time.Duration      // Time spent on data flushing since last commit
+	flushnodes uint64             // Nodes flushed since last commit
+	flushsize  common.StorageSize // Data storage flushed since last commit
+
+	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. metadata)
+	childrenSize  common.StorageSize // Storage size of the external children tracking
+	preimagesSize common.StorageSize // Storage size of the preimages cache
+
+	lock sync.RWMutex
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
 
