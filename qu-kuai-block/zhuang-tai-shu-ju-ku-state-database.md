@@ -568,5 +568,5 @@ type cachingDB struct {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-
+该结构以[Trie数据库](trie-shu-ju-ku.md)作为后端的持久化存储。
 
