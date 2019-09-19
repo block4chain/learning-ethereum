@@ -61,6 +61,8 @@ type rawShortNode struct {
 
 所有写入缓存的节点数据用一个双向链表进行组织管理，链表节点定义为:
 
+![&#x5185;&#x5B58;&#x7F13;&#x5B58;&#x53CC;&#x5411;&#x94FE;&#x8868;](../.gitbook/assets/trie_database_cache.png)
+
 {% code-tabs %}
 {% code-tabs-item title="trie/database.go" %}
 ```go
