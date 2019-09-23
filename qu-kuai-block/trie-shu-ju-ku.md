@@ -23,10 +23,10 @@ type Database struct {
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
 	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
 
-	gctime  time.Duration      // Time spent on garbage collection since last commit
-	gcnodes uint64             // Nodes garbage collected since last commit
-	gcsize  common.StorageSize // Data storage garbage collected since last commit
-
+	gctime  time.Duration      // gc消耗的时间
+	gcnodes uint64             // 最近一次gc释放的缓存节点数
+	gcsize  common.StorageSize // 最后一次gc释放的内存数
+	
 	flushtime  time.Duration      // Time spent on data flushing since last commit
 	flushnodes uint64             // Nodes flushed since last commit
 	flushsize  common.StorageSize // Data storage flushed since last commit
@@ -305,8 +305,107 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 		}
 	}
 }
-
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+### 内存占用统计
+
+`trie.Database`会跟踪统计目前缓存占用的内存大小:
+
+{% code-tabs %}
+{% code-tabs-item title="trie/database.go" %}
+```go
+type Database struct {
+    //....
+    dirtiesSize   common.StorageSize // 缓存节点占用的内存空间
+	childrenSize  common.StorageSize //引用其它节点缓存节点占用的内存空间
+	
+	preimagesSize common.StorageSize // Storage size of the preimages cache
+	//....
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 添加节点的内存开销
+
+在插入一个新节点时，会增加`Database.dirtiesSize`的值，用于计算新节点插入带来的内存开销
+
+```go
+func (db *Database) insert(hash common.Hash, blob []byte, node node) {
+    //....
+    //占用内存包含: 节点key占用的内存和节点值占用的内存
+    db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
+    //...
+}
+```
+
+### 添加引用的内存开销
+
+当前一个缓存节点引用另外一个缓存节点时，也会有一些内存开销:
+
+```go
+func (db *Database) reference(child common.Hash, parent common.Hash) {
+    //.....
+    if db.dirties[parent].children == nil {
+		db.dirties[parent].children = make(map[common.Hash]uint16)
+		//当parent之前没有引用过任何节点，则需要为parent引用信息map数据结构 这部分内存为map结构的大小, 当前为48B
+		db.childrenSize += cachedNodeChildrenSize 
+	}
+    //.....
+    //.....
+    if db.dirties[parent].children[child] == 1 {
+       //当parent之前没有引用过child, 则需要建立引用关系，这会消耗存储key和引用计数(uint16)的内存
+		db.childrenSize += common.HashLength + 2 // uint16 counter
+	}
+}
+```
+
+### 解除引用释放内存
+
+解除引用时出现内存释放包含两种情况:
+
+* 父节点对子节点的引用减为0时会释放`childrenSize`内存
+
+```go
+func (db *Database) dereference(child common.Hash, parent common.Hash) {
+	// Dereference the parent-child
+	node := db.dirties[parent]
+
+	if node.children != nil && node.children[child] > 0 {
+		node.children[child]--
+		if node.children[child] == 0 {
+			//父节点对子节点的引用计数减为0, 释放childrenSize内存
+			delete(node.children, child)
+			db.childrenSize -= (common.HashLength + 2) // uint16 counter
+		}
+	}
+```
+
+* 某个节点被引用的次数减为0，会释放`dirtiesSize`内存
+
+```go
+	node, ok := db.dirties[child]
+	if !ok {
+		return
+	}
+
+	if node.parents > 0 {
+		node.parents--
+	}
+	if node.parents == 0 {
+		//...
+		// Dereference all children and delete the node
+		for _, hash := range node.childs() {
+			db.dereference(hash, child)
+		}
+		//节点引用次数减为0，释放节点占用的内存
+		delete(db.dirties, child)
+		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		if node.children != nil {
+			db.childrenSize -= cachedNodeChildrenSize
+		}
+	}
+```
 
