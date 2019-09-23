@@ -409,3 +409,28 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	}
 ```
 
+### `Database.Cap`操作释放内存
+
+执行Cap操作会将内存缓存提交到KV数据库中，会释放内存缓存中占用的内存。
+
+```go
+func (db *Database) Cap(limit common.StorageSize) error {	
+	//....
+	for db.oldest != oldest {
+		node := db.dirties[db.oldest]
+		delete(db.dirties, db.oldest)
+		db.oldest = node.flushNext
+
+		//释放dirtiesSize内存
+		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		if node.children != nil {
+			//释放childrenSize内存
+			db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		}
+	}
+	//...
+}
+```
+
+
+
