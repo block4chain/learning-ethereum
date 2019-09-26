@@ -15,6 +15,7 @@
 * [帐户\(Account\)](qu-kuai-block/zhang-hu-account.md)
 * [状态数据库](qu-kuai-block/zhuang-tai-shu-ju-ku-state-database.md)
 * [Trie数据库](qu-kuai-block/trie-shu-ju-ku.md)
+* [安全Trie树](qu-kuai-block/an-quan-trie-shu.md)
 
 ## EIP
 
