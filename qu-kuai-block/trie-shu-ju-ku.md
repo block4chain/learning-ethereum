@@ -111,7 +111,7 @@ type cachedNode struct {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-## 写入和获取
+## 数据操作
 
 ### 写入
 
@@ -191,10 +191,188 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	}
 	return enc, err
 }
-
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+### Cap操作
+
+当缓存占用的内存空间过大，可以通过Cap释放部分内存，在释放内存的同时会将缓存的数据提交到KV数据库
+
+```go
+func (db *Database) Cap(limit common.StorageSize) error {
+	nodes, storage, start := len(db.dirties), db.dirtiesSize, time.Now()
+	batch := db.diskdb.NewBatch()
+
+	size := db.dirtiesSize + common.StorageSize((len(db.dirties)-1)*cachedNodeSize)
+	size += db.childrenSize - common.StorageSize(len(db.dirties[common.Hash{}].children)*(common.HashLength+2))
+
+	flushPreimages := db.preimagesSize > 4*1024*1024
+	//提交preimages
+	if flushPreimages {
+		for hash, preimage := range db.preimages {
+			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+				log.Error("Failed to commit preimage from trie database", "err", err)
+				return err
+			}
+			if batch.ValueSize() > ethdb.IdealBatchSize {
+				if err := batch.Write(); err != nil {
+					return err
+				}
+				batch.Reset()
+			}
+		}
+	}
+	// 提交数据，释放占用的内存，以满足limit要求
+	oldest := db.oldest
+	for size > limit && oldest != (common.Hash{}) {
+		// Fetch the oldest referenced node and push into the batch
+		node := db.dirties[oldest]
+		if err := batch.Put(oldest[:], node.rlp()); err != nil {
+			return err
+		}
+		// If we exceeded the ideal batch size, commit and reset
+		if batch.ValueSize() >= ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Error("Failed to write flush list to disk", "err", err)
+				return err
+			}
+			batch.Reset()
+		}
+		size -= common.StorageSize(common.HashLength + int(node.size) + cachedNodeSize)
+		if node.children != nil {
+			size -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		}
+		oldest = node.flushNext
+	}
+	// 数据批量写入kv数据库
+	if err := batch.Write(); err != nil {
+		log.Error("Failed to write flush list to disk", "err", err)
+		return err
+	}
+	// Write successful, clear out the flushed data
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	if flushPreimages {
+		db.preimages = make(map[common.Hash][]byte)
+		db.preimagesSize = 0
+	}
+	for db.oldest != oldest {
+		node := db.dirties[db.oldest]
+		delete(db.dirties, db.oldest)
+		db.oldest = node.flushNext
+
+		db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
+		if node.children != nil {
+			db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		}
+	}
+	if db.oldest != (common.Hash{}) {
+		db.dirties[db.oldest].flushPrev = common.Hash{}
+	}
+	//..省略一些代码
+	return nil
+}
+```
+
+### 提交
+
+Commit操作将目标节点和引用它的子节点全部提交到KV数据库，并释放占用的内存。
+
+```go
+func (db *Database) Commit(node common.Hash, report bool) error {
+	start := time.Now()
+	batch := db.diskdb.NewBatch()
+
+	for hash, preimage := range db.preimages {
+		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+			log.Error("Failed to commit preimage from trie database", "err", err)
+			return err
+		}
+		// If the batch is too large, flush to disk
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+	}
+
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	batch.Reset()
+	nodes, storage := len(db.dirties), db.dirtiesSize
+
+	uncacher := &cleaner{db}  
+	if err := db.commit(node, batch, uncacher); err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	// Uncache any leftovers in the last batch
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
+	batch.Replay(uncacher)
+	batch.Reset()
+    //...省略一些无用的代码
+	return nil
+}
+```
+
+`Database.commit`按深度优先遍历子节点，并提交子节点到KV数据库
+
+```go
+func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
+	node, ok := db.dirties[hash]
+	if !ok {
+		return nil
+	}
+	for _, child := range node.childs() {
+		if err := db.commit(child, batch, uncacher); err != nil {
+			return err
+		}
+	}
+	if err := batch.Put(hash[:], node.rlp()); err != nil {
+		return err
+	}
+	if batch.ValueSize() >= ethdb.IdealBatchSize {
+		if err := batch.Write(); err != nil {
+			return err
+		}
+		db.lock.Lock()
+		batch.Replay(uncacher)
+		batch.Reset()
+		db.lock.Unlock()
+	}
+	return nil
+}
+```
+
+### 资源清理
+
+在Commit操作中，缓存的内存清理工作委托给了`cleaner`实例
+
+```go
+type cleaner struct {
+	db *Database
+}
+//key被提交后，通过Put方法释放占用的内存
+func (c *cleaner) Put(key []byte, rlp []byte) error
+//暂未实现，不可调用
+func (c *cleaner) Delete(key []byte) error 
+```
+
+在数据被提交到KV数据库后，通过`Batch.Replay()`方法回收内存
+
+```text
+batch := db.diskdb.NewBatch()
+uncacher := &cleaner{db}
+batch.Replay(uncacher)
+```
 
 ## 内存管理
 
