@@ -44,9 +44,7 @@ description: >-
 * 当结点的RLP编码后的数据长度不超过32B, 则直接存储结点本身
 * 当结点的RLP编码后的数据长度超过32B，则引用该结点的哈希值
 
-## 源码解析
-
-### 结点类型
+## 结点类型
 
 ```go
 type node interface {
@@ -77,7 +75,7 @@ type (
 )
 ```
 
-### 结点解析
+## 结点解析
 
 * 解析分支结点
 
@@ -161,9 +159,9 @@ func decodeRef(buf []byte) (node, []byte, error) {
 }
 ```
 
-### Trier树
+## Trier树
 
-#### 定义
+### 定义
 
 ```go
 type Trie struct {
@@ -179,11 +177,10 @@ func (t *Trie) Delete(key []byte)
 func (t *Trie) TryDelete(key []byte) error
 func (t *Trie) Hash() common.Hash
 func (t *Trie) Commit(onleaf LeafCallback) (root common.Hash, err error)
+func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error
 ```
 
-#### 插入
-
-暂略
+### 插入
 
 ```go
 func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
@@ -198,13 +195,83 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 	...... 
 ```
 
-暂略
-
 * 如果是空树
 
-暂略
+```go
+case nil:
+		return true, &shortNode{key, value, t.newFlag()}, nil
+```
 
-#### 哈希
+* 如果是分支结点
+
+```go
+case *fullNode:
+		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
+		if !dirty || err != nil {
+			return false, n, err
+		}
+		n = n.copy()
+		n.flags = t.newFlag()
+		n.Children[key[0]] = nn
+		return true, n, nil
+```
+
+* 如是哈希结点\(结点引用\)
+
+```go
+case hashNode:
+		// We've hit a part of the trie that isn't loaded yet. Load
+		// the node and insert into it. This leaves all child nodes on
+		// the path to the value in the trie.
+		rn, err := t.resolveHash(n, prefix)   //从数据库中加载该结点到内存中
+		if err != nil {
+			return false, nil, err
+		}
+		dirty, nn, err := t.insert(rn, prefix, key, value)
+		if !dirty || err != nil {
+			return false, rn, err
+		}
+		return true, nn, nil
+```
+
+* 如果是叶子结点或扩展结点
+
+```go
+case *shortNode:
+		matchlen := prefixLen(key, n.Key)
+		// If the whole key matches, keep this short node as is
+		// and only update the value.
+		if matchlen == len(n.Key) {
+			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
+			if !dirty || err != nil {
+				return false, n, err
+			}
+			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
+		}
+		// Otherwise branch out at the index where they differ.
+		branch := &fullNode{flags: t.newFlag()}
+		var err error
+		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		if err != nil {
+			return false, nil, err
+		}
+		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		if err != nil {
+			return false, nil, err
+		}
+		// Replace this shortNode with the branch if it occurs at index 0.
+		if matchlen == 0 {
+			return true, branch, nil
+		}
+		// Otherwise, replace it with a short node leading up to the branch.
+		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
+```
+
+### 查找
+
+### 删除
+
+### 哈希
 
 Ethereum使用自定义hasher对象完成对Trie树的hash计算
 
@@ -415,74 +482,20 @@ case nil:
 		return true, &shortNode{key, value, t.newFlag()}, nil
 ```
 
-* 如果是分支结点
+### 证明
+
+## 安全Trie树
+
+### 定义
 
 ```go
-case *fullNode:
-		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
-		if !dirty || err != nil {
-			return false, n, err
-		}
-		n = n.copy()
-		n.flags = t.newFlag()
-		n.Children[key[0]] = nn
-		return true, n, nil
+type SecureTrie struct {
+	trie             Trie
+	hashKeyBuf       [common.HashLength]byte
+	secKeyCache      map[string][]byte
+	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
+}
 ```
-
-* 如是哈希结点\(结点引用\)
-
-```go
-case hashNode:
-		// We've hit a part of the trie that isn't loaded yet. Load
-		// the node and insert into it. This leaves all child nodes on
-		// the path to the value in the trie.
-		rn, err := t.resolveHash(n, prefix)   //从数据库中加载该结点到内存中
-		if err != nil {
-			return false, nil, err
-		}
-		dirty, nn, err := t.insert(rn, prefix, key, value)
-		if !dirty || err != nil {
-			return false, rn, err
-		}
-		return true, nn, nil
-```
-
-* 如果是叶子结点或扩展结点
-
-```go
-case *shortNode:
-		matchlen := prefixLen(key, n.Key)
-		// If the whole key matches, keep this short node as is
-		// and only update the value.
-		if matchlen == len(n.Key) {
-			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
-			if !dirty || err != nil {
-				return false, n, err
-			}
-			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
-		}
-		// Otherwise branch out at the index where they differ.
-		branch := &fullNode{flags: t.newFlag()}
-		var err error
-		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
-		if err != nil {
-			return false, nil, err
-		}
-		_, branch.Children[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
-		if err != nil {
-			return false, nil, err
-		}
-		// Replace this shortNode with the branch if it occurs at index 0.
-		if matchlen == 0 {
-			return true, branch, nil
-		}
-		// Otherwise, replace it with a short node leading up to the branch.
-		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
-```
-
-查找
-
-删除
 
 ## 参考资料
 
