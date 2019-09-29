@@ -9,7 +9,7 @@
 * [HP编码](shu-ju-jie-gou/hp-bian-ma.md)
 * [MPT树](shu-ju-jie-gou/mpt-shu.md)
 
-## 区块与状态 <a id="qu-kuai-block"></a>
+## 状态 <a id="qu-kuai-block"></a>
 
 * [区块\(Block\)](qu-kuai-block/qu-kuai.md)
 * [帐户\(Account\)](qu-kuai-block/zhang-hu-account.md)
