@@ -273,6 +273,22 @@ case *shortNode:
 
 ### 哈希
 
+```go
+func (t *Trie) Hash() common.Hash {
+	hash, cached, _ := t.hashRoot(nil, nil)
+	t.root = cached
+	return common.BytesToHash(hash.(hashNode))
+}
+func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
+	if t.root == nil {
+		return hashNode(emptyRoot.Bytes()), nil, nil
+	}
+	h := newHasher(onleaf)
+	defer returnHasherToPool(h)
+	return h.hash(t.root, db, true)
+}
+```
+
 Ethereum使用自定义hasher对象完成对Trie树的hash计算
 
 {% code-tabs %}
