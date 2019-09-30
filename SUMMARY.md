@@ -11,10 +11,14 @@
 
 ## 状态 <a id="qu-kuai-block"></a>
 
-* [区块\(Block\)](qu-kuai-block/qu-kuai.md)
 * [帐户\(Account\)](qu-kuai-block/zhang-hu-account.md)
 * [状态数据库](qu-kuai-block/zhuang-tai-shu-ju-ku-state-database.md)
 * [Trie数据库](qu-kuai-block/trie-shu-ju-ku.md)
+
+## 区块链
+
+* [交易](qu-kuai-lian/jiao-yi.md)
+* [区块\(Block\)](qu-kuai-lian/qu-kuai.md)
 
 ## EIP
 
