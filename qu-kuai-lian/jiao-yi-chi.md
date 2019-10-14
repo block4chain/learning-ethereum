@@ -74,6 +74,34 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction
 
 ## 辅助数据结构
 
+### accountSet
+
+`accountSet`记录一系列帐户构成的集合
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+type accountSet struct {
+	accounts map[common.Address]struct{}  //帐户地址集合
+	signer   types.Signer  //用于从交易中提取发送者地址
+	cache    *[]common.Address
+}
+//判断是否包含一个地址
+func (as *accountSet) contains(addr common.Address) bool
+//判断交易的发送者是否包含在这个集合中
+func (as *accountSet) containsTx(tx *types.Transaction) bool
+//添加一个地址
+func (as *accountSet) add(addr common.Address)
+//将交易的发送者帐户添加到集合中
+func (as *accountSet) addTx(tx *types.Transaction)
+//返回所有帐户数组
+func (as *accountSet) flatten() []common.Address
+//全并两个集合
+func (as *accountSet) merge(other *accountSet)
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
 ### txLookup
 
 `txLookup`用于跟踪交易，方便查询
@@ -168,7 +196,7 @@ func (m *txSortedMap) Flatten() types.Transactions
 
 ### txNoncer
 
-用于获取帐户最新nonce值
+`txNoncer`用于获取帐户最新nonce值
 
 {% code-tabs %}
 {% code-tabs-item title="core/tx\_noncer.go" %}
@@ -219,6 +247,63 @@ type TxPoolConfig struct {
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+## 收集交易
+
+### 本地交易
+
+以太坊客户端通过AP提交的交易作为_**本地交易**_被提交到交易池中
+
+{% code-tabs %}
+{% code-tabs-item title="eth/api\_backend.go" %}
+```go
+func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return b.eth.txPool.AddLocal(signedTx)
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 远端交易
+
+从p2p网络监听到的交易作为远端交易提交到交易池中
+
+{% code-tabs %}
+{% code-tabs-item title="eth/handle.go" %}
+```go
+func (pm *ProtocolManager) handleMsg(p *peer) error {
+      //省略一些代码
+      case msg.Code == TxMsg:
+		    // Transactions arrived, make sure we have a valid and fresh chain to handle them
+			if atomic.LoadUint32(&pm.acceptTxs) == 0 {
+			     break
+			}
+			// Transactions can be processed, parse all of them and deliver to the pool
+			var txs []*types.Transaction
+			if err := msg.Decode(&txs); err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			for i, tx := range txs {
+				// Validate and mark the remote transaction
+				if tx == nil {
+					return errResp(ErrDecode, "transaction %d is nil", i)
+				}
+				p.MarkTransaction(tx.Hash())
+			}
+			//提交远端交易
+			pm.txpool.AddRemotes(txs)
+		default:
+			return errResp(ErrInvalidMsgCode, "%v", msg.Code)
+	}
+	return nil
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+
+
+
 
 ## 创建交易池
 
@@ -280,4 +365,8 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+## 交易生命周期
+
+
 
