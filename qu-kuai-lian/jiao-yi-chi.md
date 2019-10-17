@@ -216,6 +216,28 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64)
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+### txPricedList
+
+`txPricedList`按Gas单价从低到高排列所有交易
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_list.go" %}
+```go
+type txPricedList struct {
+	all    *txLookup  // Pointer to the map of all transactions
+	items  *priceHeap // Heap of prices of all the stored transactions
+	stales int        // Number of stale price points to (re-heap trigger)
+}
+
+func (l *txPricedList) Put(tx *types.Transaction)
+func (l *txPricedList) Removed(count int)
+func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transactions
+func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) bool
+func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
 ## 配置
 
 {% code-tabs %}
