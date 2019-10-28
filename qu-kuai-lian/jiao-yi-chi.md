@@ -238,6 +238,46 @@ func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+### txList
+
+`txList`用来存储一个帐户的交易列表
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_list.go" %}
+```go
+type txList struct {
+	strict bool         // nonce是否严格连续递增
+	txs    *txSortedMap // 所有交易按nonce排序，并支持根据nonce索引查找
+
+	costcap *big.Int // 
+	gascap  uint64   // 
+}
+//是否已经存在一个nonce值tx相等的交易
+func (l *txList) Overlaps(tx *types.Transaction) bool
+//添加一个交易，如果交易nonce冲突，则新交易必须满足一定的条件才能替换
+func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction)
+//返回所有nonce小于threshold的交易
+func (l *txList) Forward(threshold uint64) types.Transactions
+//返回所有消耗/gas上耗超过costLimit或gasLimit的交易
+func (l *txList) Filter(costLimit *big.Int, gasLimit uint64) (types.Transactions, types.Transactions)
+//将列表大小限制到threshold
+func (l *txList) Cap(threshold int) types.Transactions
+//移除指定的交易
+func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions)
+//返回nonce<=start的交易或者nonce>=start的所有nonce连续的交易
+func (l *txList) Ready(start uint64) types.Transactions
+//返回交易列表长度
+func (l *txList) Len() int 
+//交易列表是否为空
+func (l *txList) Empty() bool
+//返回交易列表
+func (l *txList) Flatten() types.Transactions
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+
+
 ## 配置
 
 {% code-tabs %}
@@ -255,7 +295,8 @@ type TxPoolConfig struct {
 
 	//接收的交易Gas单价下限
 	PriceLimit uint64
-	PriceBump  uint64
+	
+	PriceBump  uint64  //交易碰撞时，替换交易时新交易Gas单价的增长率
 
 	//交易池交易数限制
 	AccountSlots uint64
@@ -269,6 +310,44 @@ type TxPoolConfig struct {
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
+
+## 交易队列
+
+### 全局队列
+
+交易维护两个全局队列，用于记录跟踪所有交易:
+
+* 查询队列: 利用哈希表记录所有交易，方便查询
+* 竞价队列: 按Gas单价由低到高排列所有交易\(使用小堆实现\)
+
+```go
+type TxPool struct {
+	//省略代码
+	all     *txLookup               //查询队列
+	priced  *txPricedList    // 竞价队列
+	//省略代码
+}
+```
+
+### 帐户队列
+
+交易池为帐户维护着两类交易队列，用户记录跟踪帐户提交的交易:
+
+* 等待队列
+* 可执行队列
+
+```go
+type TxPool struct {
+	//省略代码
+	pending map[common.Address]*txList   // 可执行队列
+	queue   map[common.Address]*txList   // 等待队列
+	//省略代码
+}
+```
+
+交易池队列会为每个交易帐户维护一个交易列表\(`txList`\)。
+
+
 
 ## 收集交易
 
@@ -323,7 +402,150 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-### 核心逻辑
+### 交易验证
+
+交易池在收集交易前会对交易进行一系列验证，保证收集的交易满足要求
+
+1. 交易大小不超32KB
+2. 转帐金额不是负数
+3. 交易的Gas上限不超过当前块的Gas上限
+4. 交易的签名有效
+5. 非本地交易的Gas单价满足最低要求
+6. 交易nonce值合法\(大于当前记录的最大nonce\)
+7. 交易消息的金额不超过帐户的余额
+8. 创建合约的交易规则校验
+
+```go
+func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+    //省略代码
+    if err := pool.validateTx(tx, local); err != nil {
+		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
+		invalidTxMeter.Mark(1)
+		return false, err
+	}
+	//省略代码
+}
+```
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// 交易大小
+	if tx.Size() > 32*1024 {
+		return ErrOversizedData
+	}
+	// 转帐金额
+	if tx.Value().Sign() < 0 {
+		return ErrNegativeValue
+	}
+	// gas上限
+	if pool.currentMaxGas < tx.Gas() {
+		return ErrGasLimit
+	}
+	// 交易签名
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
+	// 非本地交易的gas单价限制
+	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+		return ErrUnderpriced
+	}
+	//交易nonce
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return ErrNonceTooLow
+	}
+	//交易最大消耗的balance不超过帐户的余额
+	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		return ErrInsufficientFunds
+	}
+	// 创建合约交易gas限制
+	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true, pool.istanbul)
+	if err != nil {
+		return err
+	}
+	if tx.Gas() < intrGas {
+		return ErrIntrinsicGas
+	}
+	return nil
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 交易碰撞
+
+当同一个帐户提交了两个不同\(交易hash不同\)的交易，但交易Nonce相同，此时会发生交易碰撞。
+
+当Gas单价满足一定条件时以太坊才会用新交易替换旧交易:
+
+$$
+{newGasPrice \over oldGasPrice} > 1 + {priceBump\over100}
+$$
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+    //省略部分代码
+    if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
+		// Nonce already pending, check if required price bump is met
+		inserted, old := list.Add(tx, pool.config.PriceBump)
+		if !inserted {
+			pendingDiscardMeter.Mark(1)
+			return false, ErrReplaceUnderpriced
+		}
+		// New transaction is better, replace old one
+		if old != nil {
+			pool.all.Remove(old.Hash())
+			pool.priced.Removed(1)
+			pendingReplaceMeter.Mark(1)
+		}
+		pool.all.Add(tx)
+		pool.priced.Put(tx)
+		pool.journalTx(from, tx)
+		pool.queueTxEvent(tx)
+		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
+		return old != nil, nil
+	}
+    //省略部分代码
+}
+```
+{% endcode-tabs-item %}
+
+{% code-tabs-item title="core/tx\_list.go" %}
+```go
+//priceBump由节点自由设置
+func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+	// If there's an older better transaction, abort
+	old := l.txs.Get(tx.Nonce())
+	if old != nil {
+		threshold := new(big.Int).Div(new(big.Int).Mul(old.GasPrice(), big.NewInt(100+int64(priceBump))), big.NewInt(100))
+		if old.GasPrice().Cmp(tx.GasPrice()) >= 0 || threshold.Cmp(tx.GasPrice()) > 0 {
+			return false, nil
+		}
+	}
+
+	l.txs.Put(tx)
+	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
+		l.costcap = cost
+	}
+	if gas := tx.Gas(); l.gascap < gas {
+		l.gascap = gas
+	}
+	return true, old
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+交易处于等待队列和待执行队列情况一样。
+
+### 交易添加
+
+
 
 
 
