@@ -300,9 +300,9 @@ type TxPoolConfig struct {
 
 	//交易池交易数限制
 	AccountSlots uint64
-	GlobalSlots  uint64
+	GlobalSlots  uint64   //所有帐户可执行队列容量总限制
 	AccountQueue uint64
-	GlobalQueue  uint64
+	GlobalQueue  uint64  //所有帐户等待队列容量总限制
 	
 	//交易滞留时间限制
 	Lifetime time.Duration
@@ -543,9 +543,75 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 
 交易处于等待队列和待执行队列情况一样。
 
-### 交易添加
+### 交易拥堵
 
+交易池的队列有容量限制，容量大小定义在交易池配置中:
 
+```go
+type TxPoolConfig struct {
+	//省略代码
+	GlobalSlots  uint64   //所有帐户可执行队列容量总限制
+	GlobalQueue  uint64  //所有帐户等待队列容量总限制
+	//省略代码
+}
+```
+
+当交易池队列出现拥堵时，节点会按照一定的规则丢弃部分交易:
+
+```go
+func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
+	//省略代码
+    //交易池出现拥堵
+	if uint64(pool.all.Count()) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
+		//交易的gas单价小于所有交易的最小值，则丢弃
+		if !local && pool.priced.Underpriced(tx, pool.locals) {
+			return false, ErrUnderpriced
+		}
+		// 按gas单价从低到高丢弃远程交易
+		drop := pool.priced.Discard(pool.all.Count()-int(pool.config.GlobalSlots+pool.config.GlobalQueue-1), pool.locals)
+		for _, tx := range drop {
+			pool.removeTx(tx.Hash(), false) 
+		}
+	}
+	//省略代码
+}
+```
+
+### 交易排队
+
+当交易通过验证，并且解决碰撞、拥堵等问题，节点会把交易放入等待队列:
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, error) {
+	// Try to insert the transaction into the future queue
+	from, _ := types.Sender(pool.signer, tx) // already validated
+	if pool.queue[from] == nil {
+		pool.queue[from] = newTxList(false)  //一个新的帐户提交了交易
+	}
+	inserted, old := pool.queue[from].Add(tx, pool.config.PriceBump)  //将交易放入帐户等待队列
+	if !inserted {
+		//交易碰撞，并且不满足替换规则
+		return false, ErrReplaceUnderpriced
+	}
+	if old != nil {
+		//旧交易被替换，从全局队列中移除
+		pool.all.Remove(old.Hash())
+		pool.priced.Removed(1)
+	} else {
+		queuedCounter.Inc(1)
+	}
+	if pool.all.Get(hash) == nil {
+		//将交易放入全局队列
+		pool.all.Add(tx)
+		pool.priced.Put(tx)
+	}
+	return old != nil, nil
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
 
 
 
