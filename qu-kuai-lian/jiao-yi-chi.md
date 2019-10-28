@@ -311,6 +311,67 @@ type TxPoolConfig struct {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+## 创建交易池
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+	config = (&config).sanitize()  //检查交易池配置参数，并用默认参数纠正非法值
+	pool := &TxPool{
+		config:          config,
+		chainconfig:     chainconfig,
+		chain:           chain,
+		signer:          types.NewEIP155Signer(chainconfig.ChainID),
+		pending:         make(map[common.Address]*txList),
+		queue:           make(map[common.Address]*txList),
+		beats:           make(map[common.Address]time.Time),
+		all:             newTxLookup(),
+		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
+		reqResetCh:      make(chan *txpoolResetRequest),
+		reqPromoteCh:    make(chan *accountSet),
+		queueTxEventCh:  make(chan *types.Transaction),
+		reorgDoneCh:     make(chan chan struct{}),
+		reorgShutdownCh: make(chan struct{}),
+		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+	}
+	pool.locals = newAccountSet(pool.signer)  //加载本地帐户
+	//添加配置中的本地帐户
+	for _, addr := range config.Locals { 
+		log.Info("Setting new local account", "address", addr)
+		pool.locals.add(addr)
+	}
+	
+	pool.priced = newTxPricedList(pool.all)
+	pool.reset(nil, chain.CurrentBlock().Header())  //用当前最新块重置交易池
+
+	pool.wg.Add(1)
+	go pool.scheduleReorgLoop()
+
+	// 加载持久化的事务
+	if !config.NoLocals && config.Journal != "" {
+		pool.journal = newTxJournal(config.Journal)
+
+		if err := pool.journal.load(pool.AddLocals); err != nil {
+			log.Warn("Failed to load transaction journal", "err", err)
+		}
+		if err := pool.journal.rotate(pool.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
+	}
+
+	// 订阅新区块事件
+	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	
+	pool.wg.Add(1)
+	go pool.loop()   //启动交易池
+
+	return pool
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
 ## 交易队列
 
 ### 全局队列
@@ -346,8 +407,6 @@ type TxPool struct {
 ```
 
 交易池队列会为每个交易帐户维护一个交易列表\(`txList`\)。
-
-
 
 ## 收集交易
 
@@ -613,49 +672,43 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+## 交易日志
 
+所有添加到等待队列的本地交易，以太坊会记录一个持久化日志，从而解决节点重启的问题。
 
-## 创建交易池
+`txJournal`结构
 
 {% code-tabs %}
-{% code-tabs-item title="core/tx\_pool.go" %}
+{% code-tabs-item title="core/tx\_journal.go" %}
 ```go
+type txJournal struct {
+	path   string         //日志存储文件路径
+	writer io.WriteCloser
+}
+//加载历史上记录的交易
+func (journal *txJournal) load(add func([]*types.Transaction) []error)
+//记录已经一个交易
+func (journal *txJournal) insert(tx *types.Transaction) error
+//创建新的日志文件，并将all中所有的交易添加一条记录
+func (journal *txJournal) rotate(all map[common.Address]types.Transactions) error
+//关闭journal
+func (journal *txJournal) close() error
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+```go
+type TxPool struct {
+    //省略部分代码
+    journal *txJournal  //日志对象
+    //省略部分代码
+}
+
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
-	config = (&config).sanitize()  //检查交易池配置参数，并用默认参数纠正非法值
-	pool := &TxPool{
-		config:          config,
-		chainconfig:     chainconfig,
-		chain:           chain,
-		signer:          types.NewEIP155Signer(chainconfig.ChainID),
-		pending:         make(map[common.Address]*txList),
-		queue:           make(map[common.Address]*txList),
-		beats:           make(map[common.Address]time.Time),
-		all:             newTxLookup(),
-		chainHeadCh:     make(chan ChainHeadEvent, chainHeadChanSize),
-		reqResetCh:      make(chan *txpoolResetRequest),
-		reqPromoteCh:    make(chan *accountSet),
-		queueTxEventCh:  make(chan *types.Transaction),
-		reorgDoneCh:     make(chan chan struct{}),
-		reorgShutdownCh: make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
-	}
-	pool.locals = newAccountSet(pool.signer)  //加载本地帐户
-	//添加配置中的本地帐户
-	for _, addr := range config.Locals { 
-		log.Info("Setting new local account", "address", addr)
-		pool.locals.add(addr)
-	}
-	
-	pool.priced = newTxPricedList(pool.all)
-	pool.reset(nil, chain.CurrentBlock().Header())  //用当前最新块重置交易池
-
-	pool.wg.Add(1)
-	go pool.scheduleReorgLoop()
-
-	// 加载持久化的事务
+	//省略代码
 	if !config.NoLocals && config.Journal != "" {
+		//如果开启持久化
 		pool.journal = newTxJournal(config.Journal)
-
 		if err := pool.journal.load(pool.AddLocals); err != nil {
 			log.Warn("Failed to load transaction journal", "err", err)
 		}
@@ -663,20 +716,76 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 			log.Warn("Failed to rotate transaction journal", "err", err)
 		}
 	}
+	//省略代码
+}
+```
 
-	// 订阅新区块事件
-	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
-	
-	pool.wg.Add(1)
-	go pool.loop()   //启动交易池
+### 记录交易
 
-	return pool
+在本地交易被添加到等待队列后，会记录一个交易到本地持久化日志
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
+	// 交易必须是本地交易
+	if pool.journal == nil || !pool.locals.contains(from) {
+		return
+	}
+	if err := pool.journal.insert(tx); err != nil {
+		log.Warn("Failed to journal local transaction", "err", err)
+	}
 }
 ```
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-## 交易生命周期
+### 日志清理
 
+交易池在以下两种情况会清理日志文件:
 
+* 节点启动时
+* 定期清理
+
+{% code-tabs %}
+{% code-tabs-item title="core/tx\_pool.go" %}
+```go
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+	//省略代码
+	if !config.NoLocals && config.Journal != "" {
+		pool.journal = newTxJournal(config.Journal)
+		//省略代码
+		if err := pool.journal.rotate(pool.local()); err != nil {
+			log.Warn("Failed to rotate transaction journal", "err", err)
+		}
+	}
+	//省略代码
+	go pool.loop()  //启动交易池
+	//省略代码
+}
+func (pool *TxPool) loop() {
+	//省略代码
+	var (
+		//省略代码
+		journal = time.NewTicker(pool.config.Rejournal)   //日志文件清理计时器
+		//省略代码
+	)
+	//省略代码
+	defer journal.Stop()   //关闭日志计时器
+	//省略代码
+	case <-journal.C:
+			if pool.journal != nil {
+				pool.mu.Lock()
+				//重置日志文件
+				if err := pool.journal.rotate(pool.local()); err != nil {
+					log.Warn("Failed to rotate local tx journal", "err", err)
+				}
+				pool.mu.Unlock()
+			}
+		}
+	//省略代码
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
 
