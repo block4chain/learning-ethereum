@@ -789,3 +789,93 @@ func (pool *TxPool) loop() {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
+## 挂起交易
+
+### 请求通道
+
+交易池包含一个接收挂起请求的通道，请求中包含的是有交易需要挂起的帐户集合
+
+```go
+type TxPool struct {
+    //省略代码
+    reqPromoteCh    chan *accountSet
+    //省略代码
+}
+```
+
+### 触发挂起
+
+交易池将交易添加到等待队列以后，会发送挂起交易请求，
+
+```go
+func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
+	//省略部分代码
+	done := pool.requestPromoteExecutables(dirtyAddrs) //请求挂起
+	if sync {
+		<-done //等待挂起交易执行完毕
+	}
+	//省略部分代码
+	return errs
+}
+func (pool *TxPool) requestPromoteExecutables(set *accountSet) chan struct{} {
+	select {
+	//向reqPromoteCh通道发送挂起请求
+	case pool.reqPromoteCh <- set:
+		return <-pool.reorgDoneCh  //返回挂起操作完毕通知通道
+	case <-pool.reorgShutdownCh:
+		return pool.reorgShutdownCh
+	}
+}
+```
+
+### 处理挂起
+
+交易池在启动的时候，会开启一个goroutine处理各类事件，其中包括挂起交易请求:
+
+```go
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+    //省略部分代码
+    go pool.scheduleReorgLoop()
+    //省略部分代码
+}
+func (pool *TxPool) scheduleReorgLoop() {
+	defer pool.wg.Done()
+	var (
+		curDone       chan struct{} // curDone非空，如果runReorg正在运行
+		nextDone      = make(chan struct{}) //下次执行结束通知通道
+		launchNextRun bool 
+		reset         *txpoolResetRequest
+		dirtyAccounts *accountSet  //记录积压的持挂起交易的帐户
+		queuedEvents  = make(map[common.Address]*txSortedMap) //记录积压的交易事件
+	)
+	for {
+		// Launch next background reorg if needed
+		if curDone == nil && launchNextRun {
+			// 执行挂起交易操作
+			go pool.runReorg(nextDone, reset, dirtyAccounts, queuedEvents)
+			//清理临时状态，准备下一次执行
+			curDone, nextDone = nextDone, make(chan struct{})
+			launchNextRun = false
+			reset, dirtyAccounts = nil, nil
+			queuedEvents = make(map[common.Address]*txSortedMap)
+		}
+		select {
+		//省略代码
+		case req := <-pool.reqPromoteCh:
+			if dirtyAccounts == nil {
+				dirtyAccounts = req
+			} else {
+				dirtyAccounts.merge(req)
+			}
+			launchNextRun = true
+			pool.reorgDoneCh <- nextDone  //本次挂起请求安排到下一次reOrg操作
+		//省略代码
+		case <-curDone:
+			//当前reOrg操作已经结束
+			curDone = nil
+		//省略代码
+		}
+	}
+}
+```
+
