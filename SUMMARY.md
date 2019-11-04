@@ -19,7 +19,11 @@
 
 * [交易](jiao-yi/jiao-yi.md)
 * [交易池](jiao-yi/jiao-yi-chi.md)
-* [区块\(Block\)](jiao-yi/qu-kuai.md)
+
+## 共识
+
+* [区块](gong-shi/qu-kuai.md)
+* [挖矿](gong-shi/wa-kuang.md)
 
 ## 燃料\(Gas\)
 
