@@ -15,11 +15,11 @@
 * [状态数据库](qu-kuai-block/zhuang-tai-shu-ju-ku-state-database.md)
 * [Trie数据库](qu-kuai-block/trie-shu-ju-ku.md)
 
-## 区块链
+## 交易
 
-* [交易](qu-kuai-lian/jiao-yi.md)
-* [交易池](qu-kuai-lian/jiao-yi-chi.md)
-* [区块\(Block\)](qu-kuai-lian/qu-kuai.md)
+* [交易](jiao-yi/jiao-yi.md)
+* [交易池](jiao-yi/jiao-yi-chi.md)
+* [区块\(Block\)](jiao-yi/qu-kuai.md)
 
 ## 燃料\(Gas\)
 
