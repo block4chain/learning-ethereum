@@ -879,3 +879,71 @@ func (pool *TxPool) scheduleReorgLoop() {
 }
 ```
 
+## 发现新块
+
+### 订阅事件
+
+交易池会监听区块链中追加新块的事件，交易池中定义了一个订阅通道，并在创建时向区块链注册通道:
+
+```go
+type TxPool struct {
+    	chainHeadCh     chan ChainHeadEvent  //区块链新块事件通道
+    	chainHeadSub    event.Subscription   //区块链新块事件订阅
+    
+        reqResetCh      chan *txpoolResetRequest //重置交易池请求通道
+}
+
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+    //省略代码
+    // Subscribe events from blockchain and start the main event loop.
+	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+    //省略代码
+}
+```
+
+### 处理事件
+
+交易池启动时会新建一个goroutine用于接收并处理新块事件:
+
+```go
+func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
+    //省略代码
+    // Subscribe events from blockchain and start the main event loop.
+	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
+	pool.wg.Add(1)
+	go pool.loop()    //启动事件处理
+    //省略代码
+}
+
+//loop事件处理
+func (pool *TxPool) loop() {
+	defer pool.wg.Done()
+
+	var (
+		//省略代码
+		head = pool.chain.CurrentBlock()
+	)
+	for {
+		select {
+		// Handle ChainHeadEvent
+		case ev := <-pool.chainHeadCh:
+			if ev.Block != nil {
+				pool.requestReset(head.Header(), ev.Block.Header())   //发起重置交易池请求
+				head = ev.Block
+			}	
+		//省略代码
+		}
+		//省略代码
+	}
+	//省略代码
+}
+```
+
+
+
+
+
+
+
+
+
