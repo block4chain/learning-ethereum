@@ -49,13 +49,13 @@ type Header struct {
 {% endcode-tabs-item %}
 {% endcode-tabs %}
 
-### 块号、父块
+## 块号、父块
 
 区块链中的每个块都有块号唯一标识`Header.Number`，块号连续递增。
 
 每个块会引用前一个块号作为自己的父块，并将父块的哈希值`Header.ParentHash`保存在自己的区块头。子块保存父块的哈希值可以保证父块没有篡改。
 
-### 叔块
+## 叔块
 
 在以太坊中，除了引用父块外，还可以引用一些非主链的合法块，即叔块`Block.uncles`，叔块的引入可以带来以下好处:
 
@@ -63,7 +63,7 @@ type Header struct {
 * 减少算力浪费
 * 提升安全性
 
-### 费用
+## 费用
 
 `Header.GasLimit`指定当前块能消耗的最大Gas数，根据父块的GasLimit计算得出:
 
@@ -105,7 +105,7 @@ $$
 Block.GasUsed <= Block.GasLimit
 $$
 
-### 共识
+## 共识
 
 以太坊当前以POW做为共识算法，区块头中包含了共识相关的信息。
 
@@ -169,5 +169,50 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 
 `Header.MixDigest`是区块头的Keccak256哈希值, `Header.Nonce`是一个可变随机数，通过改过Nonce值从而使Pow结果达到目标难度
 
-### 交易结果
+## 交易
+
+### 交易列表
+
+区块包含一组交易,  区块头字段`Header.TxHash`是所有交易的MPT树的根哈希，防止交易被篡改。
+
+{% code-tabs %}
+{% code-tabs-item title="core/types/block.go" %}
+```go
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
+
+	// TODO: panic if len(txs) != len(receipts)
+	if len(txs) == 0 {
+		b.header.TxHash = EmptyRootHash
+	} else {
+		b.header.TxHash = DeriveSha(Transactions(txs))
+		b.transactions = make(Transactions, len(txs))
+		copy(b.transactions, txs)
+	}
+	//省略代码
+}
+```
+{% endcode-tabs-item %}
+
+{% code-tabs-item title="core/types/derive\_sha.go" %}
+```go
+func DeriveSha(list DerivableList) common.Hash {
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < list.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), list.GetRlp(i))
+	}
+	return trie.Hash()
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 状态数据库
+
+区块中包含的交易在执行过程中会修改区块链的状态，状态数据库中保存了当前块执行完后的最新状态值，`Header.Root`记录并索引了当前的状态数据库
+
+
 
