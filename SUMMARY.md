@@ -23,7 +23,7 @@
 ## 共识
 
 * [区块](gong-shi/qu-kuai.md)
-* [挖矿](gong-shi/wa-kuang.md)
+* [矿工](gong-shi/wa-kuang.md)
 
 ## 燃料\(Gas\)
 
