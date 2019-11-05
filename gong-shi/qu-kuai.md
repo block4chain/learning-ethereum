@@ -171,7 +171,7 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 
 ## 交易
 
-### 交易列表
+### 交易树
 
 区块包含一组交易,  区块头字段`Header.TxHash`是所有交易的MPT树的根哈希，防止交易被篡改。
 
@@ -214,5 +214,83 @@ func DeriveSha(list DerivableList) common.Hash {
 
 区块中包含的交易在执行过程中会修改区块链的状态，状态数据库中保存了当前块执行完后的最新状态值，`Header.Root`记录并索引了当前的状态数据库
 
+## 交易结果
 
+### 交易收据
+
+每笔交易执行完成后会生成一个交易收据:
+
+{% code-tabs %}
+{% code-tabs-item title="core/types/receipt.go" %}
+```go
+type Receipt struct {
+	PostState         []byte `json:"root"`  //交易完成后的中间状态数据库索引
+	Status            uint64 `json:"status"` //交易执行结果
+	//执行区块的交易过程中执行完本交易消耗的总Gas
+	CumulativeGasUsed uint64 `json:"cumulativeGasUsed" gencodec:"required"` 
+	//本交易Log的Bloom过滤器
+	Bloom             Bloom  `json:"logsBloom"         gencodec:"required"`
+	//本交易产生触发的Log
+	Logs              []*Log `json:"logs"              gencodec:"required"`
+
+	//交易hash
+	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
+	//执行本交易的合约
+	ContractAddress common.Address `json:"contractAddress"`
+	//执行本交易消耗的Gas
+	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	//
+	BlockHash        common.Hash `json:"blockHash,omitempty"`
+	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
+	TransactionIndex uint        `json:"transactionIndex"`
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 收据树
+
+区块中所有的收据会形成一个MPT收据树，树根\(Root\)会存储在`Header.ReceiptHash`中保证交易执行结果不会被篡改。
+
+{% code-tabs %}
+{% code-tabs-item title="core/types/block.go" %}
+```go
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
+	
+	//省略代码
+	if len(receipts) == 0 {
+		b.header.ReceiptHash = EmptyRootHash
+	} else {
+		b.header.ReceiptHash = DeriveSha(Receipts(receipts))  //收据树根
+		b.header.Bloom = CreateBloom(receipts)
+	}
+	//省略代码
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
+
+### 交易事件
+
+交易在执行过程\(合约执行\)中可以向外发出事件，所有的事件会构造一个Bloom过滤器进行索引，并将过滤器存放在`Header.Bloom`中
+
+{% code-tabs %}
+{% code-tabs-item title="core/types/block.go" %}
+```go
+func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
+	b := &Block{header: CopyHeader(header), td: new(big.Int)}
+	
+	//省略代码
+	if len(receipts) == 0 {
+		b.header.ReceiptHash = EmptyRootHash
+	} else {
+		b.header.ReceiptHash = DeriveSha(Receipts(receipts))  //收据树根
+		b.header.Bloom = CreateBloom(receipts)  //构造Bloom过滤器
+	}
+	//省略代码
+}
+```
+{% endcode-tabs-item %}
+{% endcode-tabs %}
 
