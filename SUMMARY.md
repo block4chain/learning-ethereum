@@ -20,10 +20,11 @@
 * [交易](jiao-yi/jiao-yi.md)
 * [交易池](jiao-yi/jiao-yi-chi.md)
 
-## 共识
+## 区块链
 
-* [区块](gong-shi/qu-kuai.md)
-* [矿工](gong-shi/wa-kuang.md)
+* [区块](qu-kuai-lian/qu-kuai.md)
+* [区块链](qu-kuai-lian/qu-kuai-lian.md)
+* [矿工](qu-kuai-lian/wa-kuang.md)
 
 ## 燃料\(Gas\)
 
