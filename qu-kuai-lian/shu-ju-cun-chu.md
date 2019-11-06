@@ -22,5 +22,5 @@ description: 以太坊在底层KV存储中会记录一些区块链的全局信�
 | r${bigendian\_block\_num}${block\_hash} | 块号对应的块Receipts RLP编码数据 |
 | LastBlock | 最新的块hash |
 | LastFast | fast sync最新的块hash |
-| LastHeader | 最新的块Header |
+| LastHeader | 最新的块hash |
 
