@@ -25,6 +25,7 @@
 * [区块](qu-kuai-lian/qu-kuai.md)
 * [区块链](qu-kuai-lian/qu-kuai-lian.md)
 * [矿工](qu-kuai-lian/wa-kuang.md)
+* [数据存储](qu-kuai-lian/shu-ju-cun-chu.md)
 
 ## 燃料\(Gas\)
 
