@@ -37,3 +37,7 @@
 * [EIP-155](eip/eip-155.md)
 * [EIP-158](eip/eip-158.md)
 
+## 优化
+
+* [State Tree Pruning](you-hua/state-tree-pruning.md)
+
