@@ -55,17 +55,7 @@ RLP编码相关的代码位于包: **github.com/ethereum/go-ethereum/rlp**
 **目录结构**
 
 ```bash
-github.com/ethereum/go-ethereum/rlp
-├── decode.go   # 解码相关代码
-├── decode_tail_test.go
-├── decode_test.go
-├── doc.go #rlp包文档
-├── encode.go #编码相关代码
-├── encoder_example_test.go
-├── encode_test.go
-├── raw.go # 处理rlp编码后的数据，切分、计算长度、分类，大小端转换
-├── raw_test.go
-└── typecache.go # go数据类型与编解码算法的映射关系缓存
+github.com/ethereum/go-ethereum/rlp├── decode.go   # 解码相关代码├── decode_tail_test.go├── decode_test.go├── doc.go #rlp包文档├── encode.go #编码相关代码├── encoder_example_test.go├── encode_test.go├── raw.go # 处理rlp编码后的数据，切分、计算长度、分类，大小端转换├── raw_test.go└── typecache.go # go数据类型与编解码算法的映射关系缓存
 ```
 
 ### **编码**
@@ -73,12 +63,7 @@ github.com/ethereum/go-ethereum/rlp
 #### **数据结构**
 
 ```go
-type encbuf struct {
-	str     []byte      // 编码后的数据缓存，不包含子表表头数据(即lheads)
-	lheads  []*listhead // 子表表头位署偏移及数据大小
-	lhsize  int         // 所有子表表头长度
-	sizebuf []byte      // 处理uint类型数据缓存
-}
+type encbuf struct {	str     []byte      // 编码后的数据缓存，不包含子表表头数据(即lheads)	lheads  []*listhead // 子表表头位署偏移及数据大小	lhsize  int         // 所有子表表头长度	sizebuf []byte      // 处理uint类型数据缓存}
 ```
 
 **todo: 理解lheads的作用**

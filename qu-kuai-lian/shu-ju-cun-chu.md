@@ -15,7 +15,7 @@ description: 以太坊在底层KV存储中会记录一些区块链的全局信�
 | Key | Value |
 | :--- | :--- |
 | h${bigendian\_block\_num}n | 块号对应的块哈希 |
-| h${bigendian\_block\_num}${block\_hash}t | 块号对应的难度目标 |
+| h${bigendian\_block\_num}${block\_hash}t | 截止到本块区块链的总难度 |
 | b${bigendian\_block\_num}${block\_hash} | 块号对应的块Body RLP编码数据 |
 | H${block\_hash} | 块号的big endian编码 |
 | h${bigendian\_block\_num}${block\_hash} | 块号对应的块Header RLP编码数据 |
