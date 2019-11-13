@@ -318,3 +318,46 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error
 {% endtab %}
 {% endtabs %}
 
+### 处理数据
+
+创建UDP连接完成后会启动一个goroutine从网络上接收数据包:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
+	//省略代码
+	go transport.readLoop()
+	return net, nil
+}
+//读取网络数据循环
+func (t *udp) readLoop() {
+	defer t.conn.Close()
+
+	buf := make([]byte, 1280)  //包最大是1280
+	for {
+		nbytes, from, err := t.conn.ReadFromUDP(buf)
+		if netutil.IsTemporaryError(err) {
+			//临时错误忽略
+			continue
+		} else if err != nil {
+			//网络连接问题，退出
+			log.Debug(fmt.Sprintf("Read error: %v", err))
+			return
+		}
+		t.handlePacket(from, buf[:nbytes]) //处理数据包
+	}
+}
+//处理udp数据包
+func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
+	pkt := ingressPacket{remoteAddr: from}
+	if err := decodePacket(buf, &pkt); err != nil {
+		return err
+	}
+	t.net.reqReadPacket(pkt)  //将数据包委托给上层处理
+	return nil
+}
+```
+{% endtab %}
+{% endtabs %}
+
