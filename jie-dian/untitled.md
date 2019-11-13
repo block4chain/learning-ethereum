@@ -199,6 +199,93 @@ topicNodes struct {
 {% endtab %}
 {% endtabs %}
 
+### 编解码
+
+数据在发送到网络时需要进行编码:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+// zeroed padding space for encodePacket.
+versionPrefix     = []byte("temporary discovery v5")
+versionPrefixSize = len(versionPrefix)
+sigSize           = 520 / 8  //65字节
+headSize = versionPrefixSize + sigSize
+var headSpace = make([]byte, headSize)
+
+func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash []byte, err error) {
+	b := new(bytes.Buffer)
+	b.Write(headSpace)  //协议头
+	b.WriteByte(ptype)
+	if err := rlp.Encode(b, req); err != nil {
+		log.Error(fmt.Sprint("error encoding packet:", err))
+		return nil, nil, err
+	}
+	packet := b.Bytes()
+	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
+	if err != nil {
+		log.Error(fmt.Sprint("could not sign packet:", err))
+		return nil, nil, err
+	}
+	copy(packet, versionPrefix)
+	copy(packet[versionPrefixSize:], sig)
+	hash = crypto.Keccak256(packet[versionPrefixSize:])
+	return packet, hash, nil
+}
+```
+{% endtab %}
+{% endtabs %}
+
+从网络上接收数据需要进行解码并转化成目标数据结构:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+func decodePacket(buffer []byte, pkt *ingressPacket) error {
+	if len(buffer) < headSize+1 {
+		return errPacketTooSmall
+	}
+	buf := make([]byte, len(buffer))
+	copy(buf, buffer)
+	prefix, sig, sigdata := buf[:versionPrefixSize], buf[versionPrefixSize:headSize], buf[headSize:]
+	if !bytes.Equal(prefix, versionPrefix) {
+		return errBadPrefix
+	}
+	fromID, err := recoverNodeID(crypto.Keccak256(buf[headSize:]), sig)
+	if err != nil {
+		return err
+	}
+	pkt.rawData = buf
+	pkt.hash = crypto.Keccak256(buf[versionPrefixSize:])
+	pkt.remoteID = fromID
+	switch pkt.ev = nodeEvent(sigdata[0]); pkt.ev {
+	case pingPacket:
+		pkt.data = new(ping)
+	case pongPacket:
+		pkt.data = new(pong)
+	case findnodePacket:
+		pkt.data = new(findnode)
+	case neighborsPacket:
+		pkt.data = new(neighbors)
+	case findnodeHashPacket:
+		pkt.data = new(findnodeHash)
+	case topicRegisterPacket:
+		pkt.data = new(topicRegister)
+	case topicQueryPacket:
+		pkt.data = new(topicQuery)
+	case topicNodesPacket:
+		pkt.data = new(topicNodes)
+	default:
+		return fmt.Errorf("unknown packet type: %d", sigdata[0])
+	}
+	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
+	err = s.Decode(pkt.data)
+	return err
+}
+```
+{% endtab %}
+{% endtabs %}
+
 ### 传输层
 
 UDP连接创建完成后需要从连接上接收和发送数据包，ethereum抽象`udp`结构体完成这一工作:
