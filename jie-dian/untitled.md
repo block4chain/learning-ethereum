@@ -1,2 +1,233 @@
-# Untitled
+# 节点发现\(v5\)
+
+## 网络层
+
+### 连接
+
+Ethereum传输层采用UDP协议，每个UDP连接在实现时用一个`conn`接口抽象，golang包`net.UDPConn`是它的一个实现:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+type conn interface {
+	ReadFromUDP(b []byte) (n int, addr *net.UDPAddr, err error)
+	WriteToUDP(b []byte, addr *net.UDPAddr) (n int, err error)
+	Close() error
+	LocalAddr() net.Addr
+}
+```
+{% endtab %}
+{% endtabs %}
+
+`p2p.sharedUDPConn`也是它的实现，用来与v4版本的节点发现共用UDP连接，所有v4版本无法处理的包都会转给v5处理:
+
+{% tabs %}
+{% tab title="p2p/discv5/server.go" %}
+```go
+func (srv *Server) setupDiscovery() error {
+    //省略部分代码
+    if !srv.NoDiscovery {
+			if srv.DiscoveryV5 {
+			    unhandled = make(chan discover.ReadPacket, 100)
+			    sconn = &sharedUDPConn{conn, unhandled}
+		   }
+		   //省略代码
+		}
+    if srv.DiscoveryV5 {
+		var ntab *discv5.Network
+		var err error
+		if sconn != nil {
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, "", srv.NetRestrict)
+		} else {
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, "", srv.NetRestrict)
+		}
+		if err != nil {
+			return err
+		}
+		if err := ntab.SetFallbackNodes(srv.BootstrapNodesV5); err != nil {
+			return err
+		}
+		srv.DiscV5 = ntab
+	}
+	return nil
+}
+```
+{% endtab %}
+{% endtabs %}
+
+### 协议
+
+v5版本的节点发现网络协议是两层结构，外层协议是结构:
+
+| 字段 | 大小\(字节\) | 描述 |
+| :--- | :--- | :--- |
+| 协议版本 | len\("temporary discovery v5"\) | 固定值: temporary discovery v5 |
+| 签名 | 65 | 子协议类型和数据的签名 |
+| 子协议类型 | 1 | 嵌套协议类型 |
+| 子协议数据 | 可变 | 子协议数据 |
+
+协议数据被接收被编码成`discv5.ingressPacket`结构:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+type ingressPacket struct {
+	remoteID   NodeID   //远端节点ID
+	remoteAddr *net.UDPAddr //远端节点udp地址
+	ev         nodeEvent 
+	hash       []byte  //
+	data       interface{} // 内层嵌套协议
+	rawData    []byte
+}
+```
+{% endtab %}
+{% endtabs %}
+
+对于不同请求，`ingressPacket.data`承载具体协议数据:
+
+{% tabs %}
+{% tab title="p2p/discv5/net.go" %}
+```go
+//子协议类型
+const (
+  pingPacket = iota + 1
+	pongPacket
+	findnodePacket
+	neighborsPacket
+	findnodeHashPacket
+	topicRegisterPacket
+	topicQueryPacket
+	topicNodesPacket
+}
+```
+{% endtab %}
+
+{% tab title="ping" %}
+```go
+//ping请求协议
+ping struct {
+		Version    uint
+		From, To   rpcEndpoint
+		Expiration uint64
+
+		// v5
+		Topics []Topic
+
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
+}
+```
+{% endtab %}
+
+{% tab title="pong" %}
+```go
+pong struct {
+		To rpcEndpoint
+
+		ReplyTok   []byte
+		Expiration uint64
+
+		// v5
+		TopicHash    common.Hash
+		TicketSerial uint32
+		WaitPeriods  []uint32
+
+		Rest []rlp.RawValue `rlp:"tail"`
+	}
+```
+{% endtab %}
+
+{% tab title="findnode" %}
+```go
+findnode struct {
+		Target     NodeID
+		Expiration uint64
+		
+		Rest []rlp.RawValue `rlp:"tail"`
+}
+```
+{% endtab %}
+
+{% tab title="findnodeHash" %}
+```go
+findnodeHash struct {
+		Target     common.Hash
+		Expiration uint64
+		
+		Rest []rlp.RawValue `rlp:"tail"`
+}
+```
+{% endtab %}
+
+{% tab title="neighbors" %}
+```go
+neighbors struct {
+		Nodes      []rpcNode
+		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
+}
+```
+{% endtab %}
+
+{% tab title="topicRegister" %}
+```go
+topicRegister struct {
+		Topics []Topic
+		Idx    uint
+		Pong   []byte
+}
+```
+{% endtab %}
+
+{% tab title="topicQuery" %}
+```go
+topicQuery struct {
+		Topic      Topic
+		Expiration uint64
+}
+```
+{% endtab %}
+
+{% tab title="topicNodes" %}
+```go
+topicNodes struct {
+		Echo  common.Hash
+		Nodes []rpcNode
+}
+```
+{% endtab %}
+{% endtabs %}
+
+### 传输层
+
+UDP连接创建完成后需要从连接上接收和发送数据包，ethereum抽象`udp`结构体完成这一工作:
+
+{% tabs %}
+{% tab title="p2p/discv5/udp.go" %}
+```go
+type udp struct {
+	conn        conn
+	priv        *ecdsa.PrivateKey
+	ourEndpoint rpcEndpoint
+	nat         nat.Interface
+	net         *Network
+}
+func (t *udp) Close() //关闭连接
+//向远端发送数据
+func (t *udp) send(remote *Node, ptype nodeEvent, data interface{}) (hash []byte)
+//向远端发送ping包
+func (t *udp) sendPing(remote *Node, toaddr *net.UDPAddr, topics []Topic) (hash []byte)
+//向远端发送查询ID请求
+func (t *udp) sendFindnode(remote *Node, target NodeID)
+func (t *udp) sendNeighbours(remote *Node, results []*Node)
+func (t *udp) sendFindnodeHash(remote *Node, target common.Hash)
+func (t *udp) sendTopicRegister(remote *Node, topics []Topic, idx int, pong []byte)
+func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
+func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error)
+func (t *udp) readLoop()
+func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error
+```
+{% endtab %}
+{% endtabs %}
 
