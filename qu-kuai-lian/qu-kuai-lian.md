@@ -1,7 +1,6 @@
 # 区块链
 
-{% tabs %}
-{% tab title="core/blockchain.go" %}
+{% code title="core/blockchain.go" %}
 ```go
 type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
@@ -51,13 +50,11 @@ type BlockChain struct {
 	terminateInsert func(common.Hash, uint64) bool // Testing hook used to terminate ancient receipt chain insertion.
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 配置
 
-{% tabs %}
-{% tab title="params/config.go" %}
+{% code title="params/config.go" %}
 ```go
 type ChainConfig struct {
 	ChainID *big.Int `json:"chainId"` // 链ID
@@ -84,15 +81,13 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty"`
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 `ChainConfig`包含区块链的一些核心配置，这些配置被存储创世块中，网络可以自定义参数。
 
 ### 主网
 
-{% tabs %}
-{% tab title="params/config.go" %}
+{% code title="params/config.go" %}
 ```go
 MainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(1),
@@ -110,13 +105,11 @@ MainnetChainConfig = &ChainConfig{
 		Ethash:              new(EthashConfig),
 	}
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 测试网
 
-{% tabs %}
-{% tab title="params/config.go" %}
+{% code title="params/config.go" %}
 ```go
 TestnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(3),
@@ -134,8 +127,7 @@ TestnetChainConfig = &ChainConfig{
 		Ethash:              new(EthashConfig),
 	}
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 其它测试网
 
@@ -144,8 +136,7 @@ TestnetChainConfig = &ChainConfig{
 
 ## 创世块
 
-{% tabs %}
-{% tab title="core/genesis.go" %}
+{% code title="core/genesis.go" %}
 ```go
 type Genesis struct {
 	Config     *params.ChainConfig `json:"config"`
@@ -165,15 +156,13 @@ type Genesis struct {
 	ParentHash common.Hash `json:"parentHash"`
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 创世块定义区块链网络的核心配置，结构体`Genesis`定义了创世块的生成模板.
 
 ### 主网创世块
 
-{% tabs %}
-{% tab title="core/genesis.go" %}
+{% code title="core/genesis.go" %}
 ```go
 func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
@@ -186,13 +175,11 @@ func DefaultGenesisBlock() *Genesis {
 	}
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 设置并加载网络配置
 
-{% tabs %}
-{% tab title="core/genesis.go" %}
+{% code title="core/genesis.go" %}
 ```go
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideIstanbul *big.Int) (*params.ChainConfig, common.Hash, error) {
 	//自定义创世块配置
@@ -262,15 +249,13 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	return newcfg, stored, nil
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 生成创世块
 
 根据Genesis实例生成一个创世块:
 
-{% tabs %}
-{% tab title="core/genesis.go" %}
+{% code title="core/genesis.go" %}
 ```go
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
@@ -311,8 +296,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	return types.NewBlock(head, nil, nil, nil)
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 
 

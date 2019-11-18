@@ -6,8 +6,7 @@ description: 交易池收集了以太坊节点本地提交或者网络接收的�
 
 ## 定义
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 type TxPool struct {
 	config      TxPoolConfig
@@ -69,8 +68,7 @@ func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error
 func (pool *TxPool) AddRemote(tx *types.Transaction) error
 func (pool *TxPool) Get(hash common.Hash) *types.Transaction
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 辅助数据结构
 
@@ -78,8 +76,7 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction
 
 `accountSet`记录一系列帐户构成的集合
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 type accountSet struct {
 	accounts map[common.Address]struct{}  //帐户地址集合
@@ -99,15 +96,13 @@ func (as *accountSet) flatten() []common.Address
 //全并两个集合
 func (as *accountSet) merge(other *accountSet)
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### txLookup
 
 `txLookup`用于跟踪交易，方便查询
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 type txLookup struct {
 	all  map[common.Hash]*types.Transaction
@@ -119,15 +114,13 @@ func (t *txLookup) Add(tx *types.Transaction)
 func (t *txLookup) Remove(hash common.Hash)
 func (t *txLookup) Range(f func(hash common.Hash, tx *types.Transaction) bool)
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### priceHeap
 
 `priceHeap`实现heap.Interface，是一个小堆，堆顶是Gas单价最低的交易。
 
-{% tabs %}
-{% tab title="core/tx\_list.go" %}
+{% code title="core/tx\_list.go" %}
 ```go
 type priceHeap []*types.Transaction
 
@@ -138,15 +131,13 @@ func (h priceHeap) Less(i, j int) bool
 func (h *priceHeap) Push(x interface{})
 func (h *priceHeap) Pop() interface{}
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### nonceHeap
 
 `nonceHead`实现heap.Interface, 是一个小堆, 堆顶最小的nonce值
 
-{% tabs %}
-{% tab title="core/tx\_list.go" %}
+{% code title="core/tx\_list.go" %}
 ```go
 type nonceHeap []uint64
 
@@ -157,15 +148,13 @@ func (h nonceHeap) Swap(i, j int)
 func (h *nonceHeap) Push(x interface{})
 func (h *nonceHeap) Pop() interface{}
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### txSortedMap
 
 `txSortedMap`是一个按nonce值排序的哈希表, 键是交易的nonce, 值是交易。
 
-{% tabs %}
-{% tab title="core/tx\_list.go" %}
+{% code title="core/tx\_list.go" %}
 ```go
 type txSortedMap struct {
 	items map[uint64]*types.Transaction // 哈希表
@@ -191,15 +180,13 @@ func (m *txSortedMap) Len() int
 //返回nonce值递增的交易数组
 func (m *txSortedMap) Flatten() types.Transactions
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### txNoncer
 
 `txNoncer`用于获取帐户最新nonce值
 
-{% tabs %}
-{% tab title="core/tx\_noncer.go" %}
+{% code title="core/tx\_noncer.go" %}
 ```go
 type txNoncer struct {
 	fallback *state.StateDB  //状态数据库
@@ -213,15 +200,13 @@ func (txn *txNoncer) set(addr common.Address, nonce uint64)
 //如果帐户nonce值小于新值，则设置新值
 func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64)
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### txPricedList
 
 `txPricedList`按Gas单价从低到高排列所有交易
 
-{% tabs %}
-{% tab title="core/tx\_list.go" %}
+{% code title="core/tx\_list.go" %}
 ```go
 type txPricedList struct {
 	all    *txLookup  // Pointer to the map of all transactions
@@ -235,15 +220,13 @@ func (l *txPricedList) Cap(threshold *big.Int, local *accountSet) types.Transact
 func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) bool
 func (l *txPricedList) Discard(count int, local *accountSet) types.Transactions
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### txList
 
 `txList`用来存储一个帐户的交易列表
 
-{% tabs %}
-{% tab title="core/tx\_list.go" %}
+{% code title="core/tx\_list.go" %}
 ```go
 type txList struct {
 	strict bool         // nonce是否严格连续递增
@@ -273,15 +256,13 @@ func (l *txList) Empty() bool
 //返回交易列表
 func (l *txList) Flatten() types.Transactions
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 
 
 ## 配置
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 type TxPoolConfig struct {
 	//本地地址列表, 交易发起方地址属于这个列表的都被认为是本地提交的交易
@@ -308,13 +289,11 @@ type TxPoolConfig struct {
 	Lifetime time.Duration
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 创建交易池
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
 	config = (&config).sanitize()  //检查交易池配置参数，并用默认参数纠正非法值
@@ -369,8 +348,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	return pool
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 交易队列
 
@@ -414,22 +392,19 @@ type TxPool struct {
 
 以太坊客户端通过AP提交的交易作为_**本地交易**_被提交到交易池中
 
-{% tabs %}
-{% tab title="eth/api\_backend.go" %}
+{% code title="eth/api\_backend.go" %}
 ```go
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return b.eth.txPool.AddLocal(signedTx)
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 远端交易
 
 从p2p网络监听到的交易作为远端交易提交到交易池中
 
-{% tabs %}
-{% tab title="eth/handle.go" %}
+{% code title="eth/handle.go" %}
 ```go
 func (pm *ProtocolManager) handleMsg(p *peer) error {
       //省略一些代码
@@ -458,8 +433,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	return nil
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 交易验证
 
@@ -486,8 +460,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 }
 ```
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// 交易大小
@@ -531,8 +504,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	return nil
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 交易碰撞
 
@@ -640,8 +612,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 当交易通过验证，并且解决碰撞、拥堵等问题，节点会把交易放入等待队列:
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, error) {
 	// Try to insert the transaction into the future queue
@@ -669,8 +640,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 	return old != nil, nil
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 交易日志
 
@@ -678,8 +648,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 
 `txJournal`结构
 
-{% tabs %}
-{% tab title="core/tx\_journal.go" %}
+{% code title="core/tx\_journal.go" %}
 ```go
 type txJournal struct {
 	path   string         //日志存储文件路径
@@ -694,8 +663,7 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 //关闭journal
 func (journal *txJournal) close() error
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ```go
 type TxPool struct {
@@ -724,8 +692,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 
 在本地交易被添加到等待队列后，会记录一个交易到本地持久化日志
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	// 交易必须是本地交易
@@ -737,8 +704,7 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 	}
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 日志清理
 
@@ -747,8 +713,7 @@ func (pool *TxPool) journalTx(from common.Address, tx *types.Transaction) {
 * 节点启动时
 * 定期清理
 
-{% tabs %}
-{% tab title="core/tx\_pool.go" %}
+{% code title="core/tx\_pool.go" %}
 ```go
 func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain blockChain) *TxPool {
 	//省略代码
@@ -786,8 +751,7 @@ func (pool *TxPool) loop() {
 	//省略代码
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 挂起交易
 

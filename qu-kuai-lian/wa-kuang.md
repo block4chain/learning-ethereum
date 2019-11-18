@@ -61,8 +61,7 @@ func (self *Miner) SetEtherbase(addr common.Address)
 
 miner有一个worker实例，worker实例执行区块的打包、共识、打包等流程。
 
-{% tabs %}
-{% tab title="miner/worker.go" %}
+{% code title="miner/worker.go" %}
 ```go
 type worker struct {
 	config      *Config
@@ -119,15 +118,13 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 新交易事件
 
 交易池有新的交易待执行时会将这些交易广播出来，woker会订阅新交易事件:
 
-{% tabs %}
-{% tab title="miner/worker.go" %}
+{% code title="miner/worker.go" %}
 ```go
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool) *worker {
     //省略代码
@@ -138,13 +135,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
     //省略代码
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 worker接收到这些事件后会交给事件处理线程:
 
-{% tabs %}
-{% tab title="miner/worker.go" %}
+{% code title="miner/worker.go" %}
 ```go
 func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
@@ -183,6 +178,5 @@ func (w *worker) mainLoop() {
 	}
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 

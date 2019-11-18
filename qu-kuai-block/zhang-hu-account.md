@@ -4,8 +4,7 @@ description: 不同与Bitcoin的UTXO模型，以太坊基于帐户模型。
 
 # 帐户\(Account\)
 
-{% tabs %}
-{% tab title="core/state/state\_object.go" %}
+{% code title="core/state/state\_object.go" %}
 ```go
 type Account struct {
 	Nonce    uint64  //该帐户发出的交易序列号，单调递增
@@ -14,15 +13,13 @@ type Account struct {
 	CodeHash []byte //合约帐户对应的合约代码hash，外部帐户该值为空
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 帐户地址
 
 以太方帐户地址是一个20B字节数组。
 
-{% tabs %}
-{% tab title="common/types.go" %}
+{% code title="common/types.go" %}
 ```go
 const (
 	// AddressLength is the expected length of the address
@@ -31,8 +28,7 @@ const (
 // Address represents the 20 byte address of an Ethereum account.
 type Address [AddressLength]byte
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 帐户类型
 

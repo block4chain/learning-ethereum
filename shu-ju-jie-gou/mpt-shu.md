@@ -291,8 +291,7 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 
 Ethereum使用自定义hasher对象完成对Trie树的hash计算
 
-{% tabs %}
-{% tab title="trie/hasher.go" %}
+{% code title="trie/hasher.go" %}
 ```go
 //hasher
 type hasher struct {
@@ -310,13 +309,11 @@ type keccakState interface {
 
 type sliceBuffer []byte
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 hasher对象采用对象池技术进行管理
 
-{% tabs %}
-{% tab title="trie/hasher.go" %}
+{% code title="trie/hasher.go" %}
 ```go
 var hasherPool = sync.Pool{
 	New: func() interface{} {
@@ -337,13 +334,11 @@ func returnHasherToPool(h *hasher) {
 	hasherPool.Put(h)
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 hasher对象先检查Trie树的hash缓存，如果缓存存在并且树没有被修改过，则优先使用缓存
 
-{% tabs %}
-{% tab title="trie/hasher.go" %}
+{% code title="trie/hasher.go" %}
 ```go
 func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
@@ -362,8 +357,7 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 	}
     //....
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 在没有缓存或树被修改过的情况时，则需要对树进行完整hash. hasher优先对子树进行哈希
 

@@ -9,8 +9,7 @@ description: >-
 
 trie.Database是Trie数据库在运行时的实例类型。trie.Database会对所有的写操作在内存中进行聚合，并周期性的批量写入KV存储引擎。
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 type Database struct {
 	diskdb ethdb.KeyValueStore // 后端kv存储引擎
@@ -38,13 +37,11 @@ type Database struct {
 	lock sync.RWMutex
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 方法
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 //返回后端KV存储引擎
 func (db *Database) DiskDB() ethdb.KeyValueReader
@@ -69,15 +66,13 @@ func (db *Database) Cap(limit common.StorageSize) error
 //提交指定的key到kv存储引擎
 func (db *Database) Commit(node common.Hash, report bool) error
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 数据缓存
 
 `trie.Database`用于存储MPT树节点和二进制Blob数据，当前这些数据写入时, trie.Database用一些内置类型对这些数据进行封装
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 type rawNode []byte //封装纯二进制blob数据
 type rawFullNode [17]node //封装MPT分支节点
@@ -87,15 +82,13 @@ type rawShortNode struct {
 	Val node
 } 
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 所有写入缓存的节点数据用一个双向链表进行组织管理，链表节点定义为:
 
 ![&#x5185;&#x5B58;&#x7F13;&#x5B58;&#x53CC;&#x5411;&#x94FE;&#x8868;](../.gitbook/assets/trie_database_cache.png)
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 type cachedNode struct {
 	node node   // Cached collapsed trie node, or raw rlp data 
@@ -108,8 +101,7 @@ type cachedNode struct {
 	flushNext common.Hash // 链表后向引用
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 数据操作
 
@@ -117,8 +109,7 @@ type cachedNode struct {
 
 向Trie数据库插入一个键值对, 参数blob是参数node的rlp序列化数据
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	// If the node's already cached, skip
@@ -149,15 +140,13 @@ func (db *Database) insert(hash common.Hash, blob []byte, node node) {
 	db.dirtiesSize += common.StorageSize(common.HashLength + entry.size)
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 获取
 
 从Trie数据库中获取指定key的值
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// It doens't make sense to retrieve the metaroot
@@ -192,8 +181,7 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	return enc, err
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### Cap操作
 
@@ -384,8 +372,7 @@ Trie数据库内存中缓存的节点被组织成双向链表，如果某个节�
 
 ### 新增引用
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 func (db *Database) Reference(child common.Hash, parent common.Hash) {
 	db.lock.Lock()
@@ -414,13 +401,11 @@ func (db *Database) reference(child common.Hash, parent common.Hash) {
 	}
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 解除引用
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 func (db *Database) Dereference(root common.Hash) {
 	// Sanity check to ensure that the meta-root is not removed
@@ -484,15 +469,13 @@ func (db *Database) dereference(child common.Hash, parent common.Hash) {
 	}
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 内存占用统计
 
 `trie.Database`会跟踪统计目前缓存占用的内存大小:
 
-{% tabs %}
-{% tab title="trie/database.go" %}
+{% code title="trie/database.go" %}
 ```go
 type Database struct {
     //....
@@ -503,8 +486,7 @@ type Database struct {
 	//....
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 添加节点的内存开销
 

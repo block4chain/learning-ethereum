@@ -17,8 +17,7 @@ todo: 以区块为研究核心，探究区块的组成、创建、执行、到�
 * 叔块头列表
 * 交易列表
 
-{% tabs %}
-{% tab title="core/types/block.go" %}
+{% code title="core/types/block.go" %}
 ```go
 //区块
 type Block struct {
@@ -46,8 +45,7 @@ type Header struct {
 	Nonce       BlockNonce   //pow随机值
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 块号、父块
 
@@ -67,8 +65,7 @@ type Header struct {
 
 `Header.GasLimit`指定当前块能消耗的最大Gas数，根据父块的GasLimit计算得出:
 
-{% tabs %}
-{% tab title="core/block\_validator.go" %}
+{% code title="core/block\_validator.go" %}
 ```go
  //params.GasLimitBoundDivisor: 1024
  //gasFloor, gasCeil是配置项，默认都是8000000
@@ -96,8 +93,7 @@ func CalcGasLimit(parent *types.Block, gasFloor, gasCeil uint64) uint64 {
 	return limit
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 `Header.GasUsed`是当前块中所有的交易消耗的Gas总数，并且需要满足:
 
@@ -220,8 +216,7 @@ func DeriveSha(list DerivableList) common.Hash {
 
 每笔交易执行完成后会生成一个交易收据:
 
-{% tabs %}
-{% tab title="core/types/receipt.go" %}
+{% code title="core/types/receipt.go" %}
 ```go
 type Receipt struct {
 	PostState         []byte `json:"root"`  //交易完成后的中间状态数据库索引
@@ -245,15 +240,13 @@ type Receipt struct {
 	TransactionIndex uint        `json:"transactionIndex"`
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 收据树
 
 区块中所有的收据会形成一个MPT收据树，树根\(Root\)会存储在`Header.ReceiptHash`中保证交易执行结果不会被篡改。
 
-{% tabs %}
-{% tab title="core/types/block.go" %}
+{% code title="core/types/block.go" %}
 ```go
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
@@ -268,15 +261,13 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	//省略代码
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 交易事件
 
 交易在执行过程\(合约执行\)中可以向外发出事件，所有的事件会构造一个Bloom过滤器进行索引，并将过滤器存放在`Header.Bloom`中
 
-{% tabs %}
-{% tab title="core/types/block.go" %}
+{% code title="core/types/block.go" %}
 ```go
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
 	b := &Block{header: CopyHeader(header), td: new(big.Int)}
@@ -291,6 +282,5 @@ func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*
 	//省略代码
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 

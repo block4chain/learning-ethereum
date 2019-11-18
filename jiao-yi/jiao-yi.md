@@ -6,8 +6,7 @@ description: 交易代表以太坊世界状态的一次状态迁移。以太坊�
 
 ## 定义
 
-{% tabs %}
-{% tab title="core/types/transaction.go" %}
+{% code title="core/types/transaction.go" %}
 ```go
 type Transaction struct {
 	data txdata
@@ -39,8 +38,7 @@ type txdata struct {
 	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 
 

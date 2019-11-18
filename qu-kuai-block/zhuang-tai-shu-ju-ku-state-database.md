@@ -114,8 +114,7 @@ type stateObject struct {
 
 StateDB中帐户详细数据用stateObject结构表示:
 
-{% tabs %}
-{% tab title="core/state/state\_object.go" %}
+{% code title="core/state/state\_object.go" %}
 ```go
 type stateObject struct {
 	address  common.Address //帐户地址
@@ -139,15 +138,13 @@ type stateObject struct {
 	deleted   bool //是否已经删除
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 #### Trie树
 
 以太坊中帐户可以包含一些持久化数据，这些数据以键值对的形式存储是一个Trie树中, Account.Root存放着这棵树的根, 在内存中通过stateObject.trie可以访问这棵树.
 
-{% tabs %}
-{% tab title="core/state/state\_object.go" %}
+{% code title="core/state/state\_object.go" %}
 ```go
 func (s *stateObject) getTrie(db Database) Trie {
 	if s.trie == nil {
@@ -161,13 +158,11 @@ func (s *stateObject) getTrie(db Database) Trie {
 	return s.trie
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 #### 方法
 
-{% tabs %}
-{% tab title="core/state/state\_object.go" %}
+{% code title="core/state/state\_object.go" %}
 ```go
 //stateObject进行RLP编码，只编码stateObject.data字段.
 func (s *stateObject) EncodeRLP(w io.Writer) error
@@ -203,13 +198,11 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte)
 //返回合约哈希值
 func (s *stateObject) CodeHash() []byte
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 方法
 
-{% tabs %}
-{% tab title="core/state/statedb.go" %}
+{% code title="core/state/statedb.go" %}
 ```go
 //获取数据库操作最后一次错误
 func (self *StateDB) Error() error
@@ -300,8 +293,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 //将对帐户和帐户状态的修改提交到对应的trie树，但还没有持久存储
 func (s *StateDB) Finalise(deleteEmptyObjects bool)
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 日志\(journal\)
 
@@ -309,8 +301,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool)
 
 状态数据库所有的状态修改操作都会通过日志进行记录.
 
-{% tabs %}
-{% tab title="core/state/journal.go" %}
+{% code title="core/state/journal.go" %}
 ```go
 type journal struct {
 	entries []journalEntry         // Current changes tracked by the journal
@@ -324,13 +315,11 @@ type journalEntry interface {
 	dirtied() *common.Address
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 journalEntry是一个接口，根据不同类型的状态修改，以太坊提供了不同的实现.
 
-{% tabs %}
-{% tab title="core/state/journal.go" %}
+{% code title="core/state/journal.go" %}
 ```go
 //创建新的stateObject
 createObjectChange struct {
@@ -388,13 +377,11 @@ touchChange struct {
 		prevDirty bool
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 方法
 
-{% tabs %}
-{% tab title="core/state/journal.go" %}
+{% code title="core/state/journal.go" %}
 ```go
 //新建journal
 func newJournal() *journal {
@@ -412,8 +399,7 @@ func (j *journal) dirty(addr common.Address)
 //journal条目数
 func (j *journal) length() int
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 回滚
 
@@ -453,21 +439,18 @@ type StateDB struct {
 
 StateDB快照的实现基于journal. StateDB.validRevisions保存了历史快照，revision结构的定义如下:
 
-{% tabs %}
-{% tab title="core/state/statedb.go" %}
+{% code title="core/state/statedb.go" %}
 ```go
 type revision struct {
 	id           int   //快照id
 	journalIndex int  //journal中entry的索引，journal中索引大于或等于journalIndex的修改包含在当前快照中
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 创建快照
 
-{% tabs %}
-{% tab title="core/state/statedb.go" %}
+{% code title="core/state/statedb.go" %}
 ```go
 func (self *StateDB) Snapshot() int {
 	id := self.nextRevisionId
@@ -476,13 +459,11 @@ func (self *StateDB) Snapshot() int {
 	return id
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ### 恢复快照
 
-{% tabs %}
-{% tab title="core/state/statedb.go" %}
+{% code title="core/state/statedb.go" %}
 ```go
 func (self *StateDB) RevertToSnapshot(revid int) {
 	// Find the snapshot in the stack of valid snapshots.
@@ -499,13 +480,11 @@ func (self *StateDB) RevertToSnapshot(revid int) {
 	self.validRevisions = self.validRevisions[:idx]
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 清理快照
 
-{% tabs %}
-{% tab title="core/state/statedb.go" %}
+{% code title="core/state/statedb.go" %}
 ```go
 func (s *StateDB) clearJournalAndRefund() {
 	s.journal = newJournal()
@@ -513,8 +492,7 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.refund = 0
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 ## 存储结构
 
@@ -532,8 +510,7 @@ type StateDB struct {
 
 ### 接口`state.Database`
 
-{% tabs %}
-{% tab title="core/state/database.go" %}
+{% code title="core/state/database.go" %}
 ```go
 type Database interface {
 	// OpenTrie opens the main account trie.
@@ -552,19 +529,16 @@ type Database interface {
 	TrieDB() *trie.Database
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
 接口`state.Database`在以太坊中只有一种实现:
 
-{% tabs %}
-{% tab title="core/state/database.go" %}
+{% code title="core/state/database.go" %}
 ```go
 type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache  //用于缓存contract code，默认大小为100000
 }
 ```
-{% endtab %}
-{% endtabs %}
+{% endcode %}
 
