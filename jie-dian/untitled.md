@@ -367,3 +367,9 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 
 ![](../.gitbook/assets/discv5_node_state.png)
 
+## 消息处理
+
+![](../.gitbook/assets/discv5-queue.png)
+
+
+
