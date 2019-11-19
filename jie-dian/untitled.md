@@ -422,6 +422,10 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 ```
 {% endcode %}
 
+### 状态机
+
+当发现一个新节点，discv5基于状态机与新节点建立通信:
+
 ![](../.gitbook/assets/discv5_node_state.png)
 
 ## 消息处理
