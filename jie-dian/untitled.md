@@ -365,6 +365,63 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 
 ## 节点状态
 
+### 节点表示
+
+discv5用结构体`Node`表示一个网络中的节点:
+
+{% code title="p2p/discv5/node.go" %}
+```go
+type Node struct {
+	IP       net.IP // 目标节点的ipv4/ipv6地址
+	UDP, TCP uint16 // 目标节点UDP/TCP端口
+	ID       NodeID // 节点ID
+
+	nodeNetGuts
+}
+// nodeNetGuts is embedded in Node and contains fields.
+type nodeNetGuts struct {
+	sha common.Hash  //节点ID sha3缓存
+
+	state             *nodeState  //记录的节点当前的状态
+	pingEcho          []byte           // 最后一个发出的ping包hash
+	pingTopics        []Topic          // 最后一个发出ping包中的topic集合
+	deferredQueries   []*findnodeQuery // 暂未发出的findnodeQuery请求
+	pendingNeighbours *findnodeQuery   // 当前正在等待响应的findnodeQuery请求
+	queryTimeouts     int   //查询超时次数
+}
+```
+{% endcode %}
+
+### 节点ID
+
+discv5网络中的节点都有一个唯一的ID标识，用类型`NodeID`表示:
+
+{% code title="p2p/discv5/node.go" %}
+```go
+const nodeIDBits = 512
+// NodeID is a unique identifier for each node.
+// The node identifier is a marshaled elliptic curve public key.
+type NodeID [nodeIDBits / 8]byte
+```
+{% endcode %}
+
+节点的ID通过节点公钥计算得出:
+
+{% code title="p2p/discv5/node.go" %}
+```go
+// PubkeyID returns a marshaled representation of the given public key.
+func PubkeyID(pub *ecdsa.PublicKey) NodeID {
+	var id NodeID
+	pbytes := elliptic.Marshal(pub.Curve, pub.X, pub.Y)
+	if len(pbytes)-1 != len(id) {
+		panic(fmt.Errorf("need %d bit pubkey, got %d bits", (len(id)+1)*8, len(pbytes)))
+	}
+	copy(id[:], pbytes[1:])
+	return id
+}
+```
+{% endcode %}
+
 ![](../.gitbook/assets/discv5_node_state.png)
 
 ## 消息处理
