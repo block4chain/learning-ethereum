@@ -428,7 +428,51 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 
 ![](../.gitbook/assets/discv5_node_state.png)
 
-## 消息处理
+## 服务层
+
+### `Network`类型
+
+discv5利用结构体`discv5.Network`对上层提供节点发现服务:
+
+{% code title="p2p/discv5/net.go" %}
+```go
+type Network struct {
+	db          *nodeDB // 已知节点数据库
+	conn        transport  //发送、接收数据包的网络连接层
+	netrestrict *netutil.Netlist  //白名单
+
+	closed           chan struct{}          // 是否关闭标志
+	closeReq         chan struct{}          // 处理关闭请求channel
+	refreshReq       chan []*Node           // 刷新请求channel
+	refreshResp      chan (<-chan struct{}) // 刷新响应channel
+	read             chan ingressPacket     // 接收的网络数据包channel
+	timeout          chan timeoutEvent      //超时事件channel
+	queryReq         chan *findnodeQuery    //查询node请求channel
+	tableOpReq       chan func()						//操作dht的操作请求channel
+	tableOpResp      chan struct{}					//操作dht的操作响应channel
+	topicRegisterReq chan topicRegisterReq  //注册topic请求channel
+	topicSearchReq   chan topicSearchReq    //搜索topic请求channel
+
+	// State of the main loop.
+	tab           *Table      //dht
+	topictab      *topicTable //topic
+	ticketStore   *ticketStore  //ticket
+	nursery       []*Node				//初始节点列表
+	nodes         map[NodeID]*Node // 活跃节点表
+	timeoutTimers map[timeoutEvent]*time.Timer  //超时事件注册表
+
+	// Revalidation queues.
+	// Nodes put on these queues will be pinged eventually.
+	slowRevalidateQueue []*Node
+	fastRevalidateQueue []*Node
+
+	// Buffers for state transition.
+	sendBuf []*ingressPacket
+}
+```
+{% endcode %}
+
+### 消息处理
 
 ![](../.gitbook/assets/discv5-queue.png)
 
