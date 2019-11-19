@@ -57,7 +57,7 @@ func (srv *Server) setupDiscovery() error {
 
 ### 协议
 
-v5版本的节点发现的网络协议是两层结构，并且包大小超过1280B，外层协议结构:
+v5版本的节点发现的网络协议是两层结构，并且包大小超过1280字节，外层协议结构:
 
 | 字段 | 大小\(字节\) | 描述 |
 | :--- | :--- | :--- |
@@ -199,7 +199,7 @@ topicNodes struct {
 {% endtab %}
 {% endtabs %}
 
-### 
+### 编解码
 
 ### 编解码
 
@@ -362,4 +362,8 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 ```
 {% endtab %}
 {% endtabs %}
+
+## 节点状态
+
+![](../.gitbook/assets/discv5_node_state.png)
 
