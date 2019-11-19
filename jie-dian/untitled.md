@@ -472,7 +472,28 @@ type Network struct {
 ```
 {% endcode %}
 
-### 消息处理
+### 消息队列
 
 ![](../.gitbook/assets/discv5-queue.png)
+
+Network实例采用消息队列+单goroutine处理相关的事件、网络请求、操作。消息队列中包含的消息包括:
+
+* 节点查询请求
+* Topic注册、查询、搜索
+* 刷新请求/响应和触发刷新的计时器
+* DHT表操作
+* 网络请求包
+* 超时事件
+* 关闭请求
+
+Network实例在创建完成后会启动处理消息队列请求的goroutine:
+
+```go
+func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netrestrict *netutil.Netlist) (*Network, error) {
+	ourID := PubkeyID(&ourPubkey)
+	//省略代码
+	go net.loop()  //启动消息队列
+	return net, nil
+}
+```
 
