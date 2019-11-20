@@ -430,6 +430,16 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 
 ## 服务层
 
+### 数据存储
+
+服务层会持久化记录一些节点的信息
+
+| 键 | 值 | 描述 |
+| :--- | :--- | :--- |
+| n:${NodeID}:discover:lastpong | uint64 | NodeID最后一次回复pong的时间 |
+| n:${NodeID}:discover:lastping | uint64 | 对NodeID最后一次ping的时间 |
+| n:${NodeID}:discover:findfail | uint64 | findnode查询目标NodeID时的错误次数 |
+
 ### `Network`类型
 
 discv5利用结构体`discv5.Network`对上层提供节点发现服务:
@@ -496,4 +506,12 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netres
 	return net, nil
 }
 ```
+
+### 刷新DHT
+
+触发DHT刷新时间
+
+* 启动时使用Bootstrap节点刷新
+* 每隔1小时定时刷新
+* 每隔1分钟刷新bucket
 
