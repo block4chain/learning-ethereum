@@ -29,6 +29,8 @@
 
 ## 节点
 
+* [节点](jie-dian/jie-dian.md)
+* [节点发现\(v4\)](jie-dian/jie-dian-fa-xian-v4.md)
 * [节点发现\(v5\)](jie-dian/untitled.md)
 
 ## 网络
