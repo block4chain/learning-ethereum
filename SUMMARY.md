@@ -29,13 +29,11 @@
 
 ## 节点
 
-* [节点](jie-dian/jie-dian.md)
-* [节点发现\(v4\)](jie-dian/jie-dian-fa-xian-v4.md)
-* [节点发现\(v5,已废弃\)](jie-dian/untitled.md)
-
 ## 网络
 
-* [Untitled](wang-luo/untitled.md)
+* [节点](wang-luo/jie-dian.md)
+* [节点发现\(v4\)](wang-luo/jie-dian-fa-xian-v4.md)
+* [节点发现\(v5,已废弃\)](wang-luo/untitled-1.md)
 
 ## 燃料\(Gas\)
 
