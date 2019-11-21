@@ -21,6 +21,31 @@ enode://6f8a80d14311c39f35f516fa664deaaaa13e85b2f7493f37f6144d86991ec01293730764
 enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8
 ```
 
+解析方法:
+
+{% code title="p2p/enode/node.go" %}
+```go
+func Parse(validSchemes enr.IdentityScheme, input string) (*Node, error) {
+	//省略
+	if !strings.HasPrefix(input, "enr:") {
+		return nil, errMissingPrefix
+	}
+	//去掉`enr:`前辍，并base64解码
+	bin, err := base64.RawURLEncoding.DecodeString(input[4:])
+	if err != nil {
+		return nil, err
+	}
+	var r enr.Record
+	//将解码数据rlp反序列化成enr.Record实例
+	if err := rlp.DecodeBytes(bin, &r); err != nil {
+		return nil, err
+	}
+	//从enr.Record恢复Node数据
+	return New(validSchemes, &r)
+}
+```
+{% endcode %}
+
 ## encode.Node类型
 
 p2p网络节点用类型`encode.Node`表示
@@ -57,4 +82,25 @@ type pair struct {
 {% endcode %}
 {% endtab %}
 {% endtabs %}
+
+### 节点记录\(enr.Record\)
+
+| 字段 | 含义 |
+| :--- | :--- |
+| seq | 版本号，当数据发生变化重新发布时递增这个值 |
+| signature | sign\(\[seq, k, v, ...\]\) |
+| raw | rlp\(\[sig, seq, k,v, ...\]\) |
+
+### 节点Pair数据
+
+| Key | Value | 描述 |
+| :--- | :--- | :--- |
+| id | v4 | 身份协议，当前是v4 |
+| secp256k1 | compressed secp256k1 public key, 33 bytes | 压缩公钥数据 |
+| ip | ipV4地址, 4字节 | 节点的IP地址 |
+| tcp | TCP端口，4字节 | TCP端口，大端序 |
+| udp | UDP端口，4字节 | UDP端口，大端序 |
+| ip6 | ipv6地址，16字节 | 节点的IPV6地址 |
+| tcp6 | ipv6特定的tcp端口地址，大端序 |  |
+| udp6 | ipv6特定的udp端口地址，大端序 |  |
 
