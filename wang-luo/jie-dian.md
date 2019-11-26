@@ -104,3 +104,52 @@ type pair struct {
 | tcp6 | ipv6特定的tcp端口地址，大端序 |  |
 | udp6 | ipv6特定的udp端口地址，大端序 |  |
 
+## 本地节点
+
+结构体`encode.LocalNode`代表本地节点:
+
+{% code title="p2p/encode/localnode.go" %}
+```go
+type LocalNode struct {
+	cur atomic.Value // holds a non-nil node pointer while the record is up-to-date.
+	id  ID
+	key *ecdsa.PrivateKey  //节点私钥
+	db  *DB
+
+	// everything below is protected by a lock
+	mu        sync.Mutex
+	seq       uint64
+	entries   map[string]enr.Entry  //enr key/value对
+	endpoint4 lnEndpoint
+	endpoint6 lnEndpoint
+}
+type lnEndpoint struct {
+	track                *netutil.IPTracker
+	staticIP, fallbackIP net.IP
+	fallbackUDP          int
+}
+```
+{% endcode %}
+
+在节点启动时，会创建`LocalNode`实例:
+
+```go
+func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
+	ln := &LocalNode{
+		id:      PubkeyToIDV4(&key.PublicKey),
+		db:      db,
+		key:     key,
+		entries: make(map[string]enr.Entry),
+		endpoint4: lnEndpoint{
+			track: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
+		},
+		endpoint6: lnEndpoint{
+			track: netutil.NewIPTracker(iptrackWindow, iptrackContactWindow, iptrackMinStatements),
+		},
+	}
+	ln.seq = db.localSeq(ln.id)  //从数据库中加载记录的enr seq号
+	ln.invalidate()
+	return ln
+}
+```
+
