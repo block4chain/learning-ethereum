@@ -31,6 +31,7 @@
 
 ## 网络
 
+* [数据存储](wang-luo/shu-ju-cun-chu.md)
 * [节点](wang-luo/jie-dian.md)
 * [节点发现\(v4\)](wang-luo/jie-dian-fa-xian-v4.md)
 * [节点发现\(v5,已废弃\)](wang-luo/untitled-1.md)

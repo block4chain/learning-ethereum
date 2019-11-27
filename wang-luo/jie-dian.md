@@ -1,5 +1,24 @@
 # 节点
 
+## 节点ID（v4\)
+
+v4版本的网络中，节点ID是一个32字节的字节数组
+
+```go
+type ID [32]byte
+```
+
+节点通过公钥计算得出:
+
+```go
+func PubkeyToIDV4(key *ecdsa.PublicKey) ID {
+	e := make([]byte, 64)
+	math.ReadBits(key.X, e[:len(e)/2])
+	math.ReadBits(key.Y, e[len(e)/2:])
+	return ID(crypto.Keccak256Hash(e))
+}
+```
+
 ## 地址表示
 
 ### Enode URL
@@ -104,7 +123,40 @@ type pair struct {
 | tcp6 | ipv6特定的tcp端口地址，大端序 |  |
 | udp6 | ipv6特定的udp端口地址，大端序 |  |
 
+### 签名
+
+```go
+func SignV4(r *enr.Record, privkey *ecdsa.PrivateKey) error {
+	// Copy r to avoid modifying it if signing fails.
+	cpy := *r
+	cpy.Set(enr.ID("v4"))
+	cpy.Set(Secp256k1(privkey.PublicKey))
+
+	h := sha3.NewLegacyKeccak256()
+	rlp.Encode(h, cpy.AppendElements(nil))
+	sig, err := crypto.Sign(h.Sum(nil), privkey)
+	if err != nil {
+		return err
+	}
+	sig = sig[:len(sig)-1] // remove v
+	if err = cpy.SetSig(V4ID{}, sig); err == nil {
+		*r = cpy
+	}
+	return err
+}
+
+func (r *Record) AppendElements(list []interface{}) []interface{} {
+	list = append(list, r.seq)
+	for _, p := range r.pairs {
+		list = append(list, p.k, p.v)
+	}
+	return list
+}
+```
+
 ## 本地节点
+
+### `LocalNode`结构
 
 结构体`encode.LocalNode`代表本地节点:
 
@@ -150,6 +202,34 @@ func NewLocalNode(db *DB, key *ecdsa.PrivateKey) *LocalNode {
 	ln.seq = db.localSeq(ln.id)  //从数据库中加载记录的enr seq号
 	ln.invalidate()
 	return ln
+}
+```
+
+### sign方法
+
+sign方法用于将`LocalNode`实例转变成节点`Node`实例
+
+```go
+func (ln *LocalNode) sign() {
+	if n := ln.cur.Load().(*Node); n != nil {
+		return // no changes
+	}
+	var r enr.Record
+	for _, e := range ln.entries {
+		r.Set(e)
+	}
+	ln.bumpSeq()  //增长序列号
+	r.SetSeq(ln.seq)
+	//用私钥对Record进行签名
+	if err := SignV4(&r, ln.key); err != nil {
+		panic(fmt.Errorf("enode: can't sign record: %v", err))
+	}
+	//生成Node实例
+	n, err := New(ValidSchemes, &r)
+	if err != nil {
+		panic(fmt.Errorf("enode: can't verify local record: %v", err))
+	}
+	ln.cur.Store(n) //保存到缓存
 }
 ```
 
