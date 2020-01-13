@@ -8,7 +8,9 @@ description: 以太坊是一个互联网范围下的状态机，每次的交易�
 
 ## 世界状态
 
-世界状态\(World State\)是所有帐户\(Account\)状态组成的集合，通过一个MPT树进行组织，树根\(root\)存储在块结构中的stateRoot域中。
+### 帐户
+
+所有帐户\(Account\)状态`state.Account`组成的集合，通过一个MPT树进行组织，树根\(root\)存储在块结构中的stateRoot域中。
 
 {% tabs %}
 {% tab title="core/blockchain.go" %}
@@ -45,6 +47,10 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 ```
 {% endtab %}
 {% endtabs %}
+
+### 帐户状态
+
+合约帐户将合约状态数据存储在状态数据库中，通过合约帐户地址可以索引到帐户状态Trie树。
 
 ## 状态数据库
 
