@@ -27,8 +27,6 @@
 * [区块链](qu-kuai-lian/qu-kuai-lian.md)
 * [矿工](qu-kuai-lian/wa-kuang.md)
 
-## 节点
-
 ## 网络
 
 * [数据存储](wang-luo/shu-ju-cun-chu.md)
@@ -41,8 +39,11 @@
 * [燃料\(Gas\)](ran-liao-gas/ran-liao-gas.md)
 * [固定消耗](ran-liao-gas/gu-ding-xiao-hao.md)
 
+## 虚拟机
+
 ## EIP
 
+* [EIP-2](eip/eip-2.md)
 * [EIP-155](eip/eip-155.md)
 * [EIP-158](eip/eip-158.md)
 
